@@ -8,22 +8,34 @@ from psycopg.errors import UniqueViolation
 from apps.api.schemas import JobCreate, JobIndexResult, JobRead
 from db.jobs import JobRepository
 from services.job_indexing import JobNotFoundError, index_job
+from services.job_skills import enrich_job_skills
 
 
 router = APIRouter(prefix="/jobs", tags=["jobs"])
 
 
 @router.post("", response_model=JobRead)
-def create_job(job: JobCreate) -> dict:
+def create_job(job: JobCreate, index: bool = Query(default=False)) -> dict:
+    repository = JobRepository()
     try:
-        return JobRepository().create(job.model_dump())
+        created = repository.create(enrich_job_skills(job.model_dump()))
     except UniqueViolation as exc:
         raise HTTPException(status_code=409, detail="Job URL already exists") from exc
+    if index:
+        try:
+            index_job(str(created["id"]), jobs=repository)
+        except JobNotFoundError as exc:
+            raise HTTPException(status_code=404, detail="Job not found") from exc
+    return repository.get(str(created["id"])) or created
 
 
 @router.get("", response_model=list[JobRead])
-def list_jobs(limit: int = Query(default=50, ge=1, le=200)) -> list[dict]:
-    return JobRepository().list(limit=limit)
+def list_jobs(
+    limit: int = Query(default=50, ge=1, le=200),
+    source: str | None = Query(default=None),
+    indexed: bool | None = Query(default=None),
+) -> list[dict]:
+    return JobRepository().list(limit=limit, source=source, indexed=indexed)
 
 
 @router.get("/{job_id}", response_model=JobRead)

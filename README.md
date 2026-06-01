@@ -259,6 +259,57 @@ Fixture imports skip duplicate job URLs, so re-running the command does not abor
 SCOUT_EMBEDDINGS=hash uv run python main.py jobs import-mock --count 10 --index
 ```
 
+## Import Adzuna Jobs
+
+Adzuna imports use the official API, store the raw payload in `jobs.raw_payload`, extract known skills from title/description, skip duplicate job URLs, index jobs by default, and record import runs:
+
+```bash
+export ADZUNA_APP_ID=...
+export ADZUNA_APP_KEY=...
+
+SCOUT_EMBEDDINGS=hash uv run python main.py jobs import-adzuna \
+  --country gb \
+  --what "python developer" \
+  --where "London" \
+  --count 10
+```
+
+Use `--no-index` to import without search indexing. Use `--app-id` and `--app-key` to pass credentials without environment variables. `--country` is the Adzuna country code for the API endpoint.
+
+With the API running and `ADZUNA_APP_ID`/`ADZUNA_APP_KEY` set in the API process environment, trigger the same import through HTTP:
+
+```bash
+curl -X POST http://127.0.0.1:8000/providers/adzuna/import \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "country": "gb",
+    "what": "python developer",
+    "where": "London",
+    "count": 10,
+    "index": true
+  }'
+```
+
+List imported Adzuna jobs and indexed status:
+
+```bash
+curl 'http://127.0.0.1:8000/jobs?source=adzuna&indexed=true&limit=10'
+```
+
+List recent provider import runs:
+
+```bash
+curl 'http://127.0.0.1:8000/providers/import-runs?provider=adzuna&limit=10'
+```
+
+Manual job creation accepts `?index=true` when the API process has a working embedding provider:
+
+```bash
+curl -X POST 'http://127.0.0.1:8000/jobs?index=true' \
+  -H 'Content-Type: application/json' \
+  -d '{"title":"Python Developer","description":"Build FastAPI services on PostgreSQL and Docker."}'
+```
+
 ## Index A Job
 
 ```bash
@@ -349,9 +400,12 @@ The default explanation model is `gpt-5.5`, which has been verified with the cur
 ```txt
 GET  /health
 POST /jobs
-GET  /jobs
+POST /jobs?index=true
+GET  /jobs?source=adzuna&indexed=true
 GET  /jobs/{job_id}
 POST /jobs/{job_id}/index
+POST /providers/adzuna/import
+GET  /providers/import-runs?provider=adzuna
 POST /profiles
 GET  /profiles
 GET  /profiles/{profile_id}
@@ -383,9 +437,7 @@ curl http://127.0.0.1:8000/health
 frontend UI
 scraping
 raw job text normalization
-automatic indexing after job creation
 background workers
-persistent ranking history
 cover letter generation
 CV keyword suggestions
 auth/users/multi-tenancy

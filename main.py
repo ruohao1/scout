@@ -42,6 +42,61 @@ def build_parser() -> argparse.ArgumentParser:
     )
     import_mock_parser.set_defaults(handler=import_mock_jobs)
 
+    import_adzuna_parser = jobs_subparsers.add_parser("import-adzuna", help="Import jobs from the Adzuna API")
+    import_adzuna_parser.add_argument(
+        "--count",
+        type=int,
+        default=10,
+        help="Number of Adzuna jobs to import",
+    )
+    import_adzuna_parser.add_argument(
+        "--country",
+        default="gb",
+        help="Adzuna country code, for example gb, us, fr, or de",
+    )
+    import_adzuna_parser.add_argument(
+        "--what",
+        help="Search query passed to Adzuna, for example 'python developer'",
+    )
+    import_adzuna_parser.add_argument(
+        "--where",
+        help="Location query passed to Adzuna, for example 'London'",
+    )
+    import_adzuna_parser.add_argument(
+        "--app-id",
+        help="Adzuna app id; defaults to ADZUNA_APP_ID",
+    )
+    import_adzuna_parser.add_argument(
+        "--app-key",
+        help="Adzuna app key; defaults to ADZUNA_APP_KEY",
+    )
+    import_adzuna_parser.add_argument(
+        "--results-per-page",
+        type=int,
+        default=50,
+        help="Adzuna page size used while fetching results",
+    )
+    index_group = import_adzuna_parser.add_mutually_exclusive_group()
+    index_group.add_argument(
+        "--index",
+        dest="index",
+        action="store_true",
+        help="Index imported jobs for search after insertion (default)",
+    )
+    index_group.add_argument(
+        "--no-index",
+        dest="index",
+        action="store_false",
+        help="Import jobs without indexing them for search",
+    )
+    import_adzuna_parser.add_argument(
+        "--source",
+        default="adzuna",
+        help="Source name stored on imported jobs",
+    )
+    import_adzuna_parser.set_defaults(handler=import_adzuna_jobs)
+    import_adzuna_parser.set_defaults(index=True)
+
     auth_parser = subparsers.add_parser("auth", help="Manage provider authentication")
     auth_subparsers = auth_parser.add_subparsers(dest="auth_provider")
 
@@ -101,6 +156,41 @@ def import_mock_jobs(args: argparse.Namespace) -> int:
         print(f"Skipped {result.skipped} duplicate mock jobs.")
     if args.index:
         print(f"Indexed {result.indexed} mock jobs.")
+    for job in result.created:
+        print(job["id"])
+    return 0
+
+
+def import_adzuna_jobs(args: argparse.Namespace) -> int:
+    from services import AdzunaJobProviderAdapter, AdzunaJobProviderClient, import_jobs
+
+    if args.count < 0:
+        print("error: --count must be greater than or equal to 0", file=sys.stderr)
+        return 1
+
+    try:
+        result = import_jobs(
+            client=AdzunaJobProviderClient(
+                app_id=args.app_id,
+                app_key=args.app_key,
+                country=args.country,
+                what=args.what,
+                where=args.where,
+                results_per_page=args.results_per_page,
+            ),
+            adapter=AdzunaJobProviderAdapter(source=args.source),
+            count=args.count,
+            should_index=args.index,
+        )
+    except Exception as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 1
+
+    print(f"Imported {len(result.created)} Adzuna jobs.")
+    if result.skipped:
+        print(f"Skipped {result.skipped} duplicate Adzuna jobs.")
+    if args.index:
+        print(f"Indexed {result.indexed} Adzuna jobs.")
     for job in result.created:
         print(job["id"])
     return 0

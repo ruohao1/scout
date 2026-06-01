@@ -2,6 +2,7 @@ from .config import database_url
 from .job_chunks import JobChunkRepository
 from .jobs import JobRepository
 from .profiles import ProfileRepository
+from .provider_import_runs import ProviderImportRunRepository
 from .pgvector import PgVectorChunkStore
 from .schema import setup_database
 from .search import JobSearchRepository
@@ -12,6 +13,7 @@ __all__ = [
     "JobSearchRepository",
     "PgVectorChunkStore",
     "ProfileRepository",
+    "ProviderImportRunRepository",
     "database_url",
     "setup_database",
 ]

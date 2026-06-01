@@ -1,6 +1,12 @@
 from __future__ import annotations
 
+import html
 import json
+import os
+import re
+import urllib.error
+import urllib.parse
+import urllib.request
 import uuid
 from dataclasses import dataclass
 from pathlib import Path
@@ -11,6 +17,7 @@ from psycopg.errors import UniqueViolation
 from db.jobs import JobRepository
 
 from .job_indexing import index_job
+from .job_skills import enrich_job_skills
 
 
 class JobProviderClient(Protocol):
@@ -76,6 +83,112 @@ class MockJobProviderAdapter:
         }
 
 
+class AdzunaJobProviderClient:
+    def __init__(
+        self,
+        *,
+        app_id: str | None = None,
+        app_key: str | None = None,
+        country: str = "gb",
+        what: str | None = None,
+        where: str | None = None,
+        results_per_page: int = 50,
+        timeout: float = 30.0,
+        base_url: str = "https://api.adzuna.com/v1/api/jobs",
+    ) -> None:
+        self.app_id = app_id or os.environ.get("ADZUNA_APP_ID")
+        self.app_key = app_key or os.environ.get("ADZUNA_APP_KEY")
+        self.country = country.strip().lower()
+        self.what = what
+        self.where = where
+        self.results_per_page = results_per_page
+        self.timeout = timeout
+        self.base_url = base_url.rstrip("/")
+
+    def fetch_jobs(self, *, count: int) -> list[dict[str, Any]]:
+        if count <= 0:
+            return []
+        if not self.app_id or not self.app_key:
+            raise ValueError("Adzuna requires ADZUNA_APP_ID and ADZUNA_APP_KEY, or --app-id and --app-key")
+        if not self.country:
+            raise ValueError("Adzuna country must not be empty")
+        if self.results_per_page <= 0:
+            raise ValueError("Adzuna results_per_page must be greater than 0")
+
+        jobs: list[dict[str, Any]] = []
+        page = 1
+        while len(jobs) < count:
+            page_size = min(self.results_per_page, count - len(jobs))
+            payload = self._request_page(page=page, results_per_page=page_size)
+            results = payload.get("results")
+            if not isinstance(results, list):
+                raise ValueError("Adzuna response did not include a results list")
+
+            page_jobs = [job for job in results if isinstance(job, dict)]
+            jobs.extend(page_jobs)
+            if len(page_jobs) < page_size:
+                break
+            page += 1
+        return jobs[:count]
+
+    def _request_page(self, *, page: int, results_per_page: int) -> dict[str, Any]:
+        params = {
+            "app_id": self.app_id,
+            "app_key": self.app_key,
+            "results_per_page": str(results_per_page),
+            "content-type": "application/json",
+        }
+        if self.what:
+            params["what"] = self.what
+        if self.where:
+            params["where"] = self.where
+
+        country = urllib.parse.quote(self.country, safe="")
+        url = f"{self.base_url}/{country}/search/{page}?{urllib.parse.urlencode(params)}"
+        request = urllib.request.Request(url, headers={"User-Agent": "scout-job-importer/0.1"})
+        try:
+            with urllib.request.urlopen(request, timeout=self.timeout) as response:
+                data = json.loads(response.read().decode("utf-8"))
+        except urllib.error.HTTPError as exc:
+            body = exc.read().decode("utf-8", errors="replace")
+            raise RuntimeError(f"Adzuna request failed with HTTP {exc.code}: {body}") from exc
+        except urllib.error.URLError as exc:
+            raise RuntimeError(f"Adzuna request failed: {exc.reason}") from exc
+        if not isinstance(data, dict):
+            raise ValueError("Adzuna response was not a JSON object")
+        return data
+
+
+class AdzunaJobProviderAdapter:
+    def __init__(self, *, source: str = "adzuna") -> None:
+        self.source = source
+
+    def normalize(self, payload: dict[str, Any]) -> dict[str, Any]:
+        title = _string_value(payload, "title")
+        description = _clean_text(_string_value(payload, "description") or "")
+        if not title:
+            raise ValueError("Adzuna job payload is missing title")
+        if not description:
+            raise ValueError("Adzuna job payload is missing description")
+
+        company = _dict_value(payload, "company")
+        location = _dict_value(payload, "location")
+        return {
+            "title": title,
+            "company": _string_value(company, "display_name"),
+            "location": _adzuna_location(location),
+            "contract_type": _adzuna_contract_type(payload),
+            "source": self.source,
+            "url": _adzuna_url(payload),
+            "description": description,
+            "salary": _adzuna_salary(payload),
+            "seniority": _infer_seniority(f"{title}\n{description}"),
+            "remote_policy": _infer_remote_policy(f"{title}\n{description}\n{_adzuna_location(location) or ''}"),
+            "skills": _string_list(payload.get("skills")),
+            "raw_payload": payload,
+        }
+
+
 def import_jobs(
     *,
     client: JobProviderClient,
@@ -91,7 +204,7 @@ def import_jobs(
 
     for payload in client.fetch_jobs(count=count):
         try:
-            job = repository.create(adapter.normalize(payload))
+            job = repository.create(enrich_job_skills(adapter.normalize(payload)))
         except UniqueViolation:
             skipped += 1
             continue
@@ -176,6 +289,98 @@ def _salary(compensation: dict[str, Any]) -> str | None:
     if isinstance(minimum, int) and isinstance(maximum, int):
         return f"{minimum:,}-{maximum:,} {currency}/{period}".replace(",", " ")
     return None
+
+
+def _adzuna_location(location: dict[str, Any]) -> str | None:
+    display_name = _string_value(location, "display_name")
+    if display_name:
+        return display_name
+    area = location.get("area")
+    if isinstance(area, list):
+        parts = [item.strip() for item in area if isinstance(item, str) and item.strip()]
+        return ", ".join(parts) if parts else None
+    return None
+
+
+def _adzuna_contract_type(payload: dict[str, Any]) -> str | None:
+    contract_type = _string_value(payload, "contract_type")
+    contract_time = _string_value(payload, "contract_time")
+    normalized_type = (contract_type or "").lower().replace("_", "-")
+    normalized_time = (contract_time or "").lower().replace("_", "-")
+    if normalized_type == "contract":
+        return "contract"
+    if normalized_type == "permanent" or normalized_time == "full-time":
+        return "full-time"
+    if normalized_time == "part-time":
+        return "part-time"
+    return contract_type or contract_time
+
+
+def _adzuna_url(payload: dict[str, Any]) -> str | None:
+    redirect_url = _string_value(payload, "redirect_url")
+    if redirect_url:
+        return redirect_url
+    adzuna_id = _string_value(payload, "id")
+    return f"adzuna:{adzuna_id}" if adzuna_id else None
+
+
+def _adzuna_salary(payload: dict[str, Any]) -> str | None:
+    minimum = _number_value(payload.get("salary_min"))
+    maximum = _number_value(payload.get("salary_max"))
+    if minimum is not None and maximum is not None:
+        return f"{_format_number(minimum)}-{_format_number(maximum)}"
+    if minimum is not None:
+        return f"from {_format_number(minimum)}"
+    if maximum is not None:
+        return f"up to {_format_number(maximum)}"
+    return None
+
+
+def _infer_seniority(text: str) -> str | None:
+    normalized = text.lower()
+    if re.search(r"\b(senior|sr\.?|principal|staff)\b", normalized):
+        return "senior"
+    if re.search(r"\b(lead|manager|head of)\b", normalized):
+        return "lead"
+    if re.search(r"\b(mid|middle|intermediate)\b", normalized):
+        return "mid-level"
+    if re.search(r"\b(junior|jr\.?|entry[- ]level|graduate)\b", normalized):
+        return "junior"
+    if re.search(r"\b(intern|internship|student|placement)\b", normalized):
+        return "student"
+    return None
+
+
+def _infer_remote_policy(text: str) -> str | None:
+    normalized = text.lower()
+    if re.search(r"\bhybrid\b", normalized):
+        return "hybrid"
+    if re.search(r"\b(remote|work from home|wfh)\b", normalized):
+        return "remote"
+    if re.search(r"\b(onsite|on-site|office based)\b", normalized):
+        return "onsite"
+    return None
+
+
+def _clean_text(value: str) -> str:
+    text = html.unescape(value)
+    text = re.sub(r"<\s*br\s*/?>", "\n", text, flags=re.IGNORECASE)
+    text = re.sub(r"</\s*p\s*>", "\n\n", text, flags=re.IGNORECASE)
+    text = re.sub(r"<[^>]+>", " ", text)
+    text = re.sub(r"[ \t\r\f\v]+", " ", text)
+    return re.sub(r"\n\s*\n\s*\n+", "\n\n", text).strip()
+
+
+def _number_value(value: object) -> float | None:
+    if isinstance(value, int | float):
+        return float(value)
+    return None
+
+
+def _format_number(value: float) -> str:
+    if value.is_integer():
+        return f"{int(value):,}".replace(",", " ")
+    return f"{value:,.2f}".replace(",", " ")
 
 
 def _dict_value(payload: dict[str, Any], key: str) -> dict[str, Any]:
