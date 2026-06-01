@@ -187,7 +187,7 @@ curl -X POST http://127.0.0.1:8000/profiles/upload \
   -F "extract_profile=true"
 ```
 
-Profile extraction requires OpenAI OAuth login. Manual multipart fields override extracted fields:
+Profile extraction requires OpenAI OAuth login. The LLM reads the extracted CV text, returns evidence/confidence-backed structured fields, and Scout normalizes those fields into the stored profile. Manual multipart fields override extracted fields:
 
 ```bash
 curl -X POST http://127.0.0.1:8000/profiles/upload \
