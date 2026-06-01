@@ -43,6 +43,38 @@ OpenAPI docs are available at:
 http://127.0.0.1:8000/docs
 ```
 
+## Docker Compose
+
+Build and run the containerized stack:
+
+```bash
+docker compose build
+docker compose up -d postgres redis
+docker compose run --rm api uv run python main.py db setup
+docker compose up -d api web
+```
+
+Container endpoints:
+
+```txt
+API: http://127.0.0.1:8000/docs
+Web: http://127.0.0.1:5173
+```
+
+The Compose stack defaults to deterministic local embeddings so it can run without external API keys:
+
+```env
+SCOUT_EMBEDDINGS=hash
+```
+
+To use Gemini embeddings in containers, set `SCOUT_EMBEDDINGS=gemini` and `GEMINI_API_KEY` before starting the API. Re-index jobs after changing embedding provider, model, or dimensions.
+
+OpenAI OAuth tokens for containerized profile extraction and explanations are stored in the `scout-auth` Docker volume. Log in through the API container when needed:
+
+```bash
+docker compose run --rm api uv run python main.py auth openai login --no-browser
+```
+
 ## Configuration
 
 Copy `.env.example` if you want local environment values:
