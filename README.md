@@ -145,6 +145,14 @@ The current end-to-end flow is:
 
 Jobs must be indexed before `/search`, `/rank-jobs`, or `/rank-jobs/explain` can find them.
 
+## AI Workflow Chat
+
+`POST /chat` uses a LangGraph-backed workflow with OpenAI Auth to plan safe read-only tool calls for profile lookup, job search, and deterministic ranking. If the AI workflow planner is unavailable, Scout falls back to the local keyword router and returns a warning.
+
+The LLM chooses workflow steps and writes the final response, but deterministic services own database reads, retrieval, and ranking scores.
+
+The graph can report corpus status and can import/index mock jobs after an explicit user confirmation. Real provider import remains outside chat for now.
+
 ## Health
 
 ```bash
