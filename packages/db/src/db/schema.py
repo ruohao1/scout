@@ -62,14 +62,33 @@ def setup_database(*, url: str | None = None) -> None:
             )
             """
         )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS provider_import_runs (
+                id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+                provider text NOT NULL,
+                query jsonb NOT NULL DEFAULT '{}'::jsonb,
+                requested_count integer NOT NULL DEFAULT 0,
+                created_count integer NOT NULL DEFAULT 0,
+                skipped_count integer NOT NULL DEFAULT 0,
+                indexed_count integer NOT NULL DEFAULT 0,
+                status text NOT NULL,
+                error text,
+                created_at timestamptz NOT NULL DEFAULT now()
+            )
+            """
+        )
         conn.execute("CREATE INDEX IF NOT EXISTS jobs_location_idx ON jobs (location)")
         conn.execute("CREATE INDEX IF NOT EXISTS jobs_contract_type_idx ON jobs (contract_type)")
         conn.execute("CREATE INDEX IF NOT EXISTS jobs_seniority_idx ON jobs (seniority)")
         conn.execute("CREATE INDEX IF NOT EXISTS jobs_remote_policy_idx ON jobs (remote_policy)")
         conn.execute("CREATE INDEX IF NOT EXISTS jobs_skills_gin_idx ON jobs USING gin (skills)")
+        conn.execute("CREATE INDEX IF NOT EXISTS jobs_source_idx ON jobs (source)")
         conn.execute("CREATE INDEX IF NOT EXISTS jobs_created_at_idx ON jobs (created_at DESC)")
         conn.execute("CREATE INDEX IF NOT EXISTS job_chunks_job_id_idx ON job_chunks (job_id)")
         conn.execute("CREATE INDEX IF NOT EXISTS job_chunks_section_idx ON job_chunks (section)")
+        conn.execute("CREATE INDEX IF NOT EXISTS provider_import_runs_provider_idx ON provider_import_runs (provider)")
+        conn.execute("CREATE INDEX IF NOT EXISTS provider_import_runs_created_at_idx ON provider_import_runs (created_at DESC)")
         conn.execute("CREATE INDEX IF NOT EXISTS user_profiles_skills_gin_idx ON user_profiles USING gin (skills)")
         conn.execute(
             """

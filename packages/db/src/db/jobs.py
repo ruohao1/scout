@@ -27,6 +27,26 @@ JOB_COLUMNS = """
     updated_at
 """
 
+JOB_LIST_COLUMNS = """
+    jobs.id,
+    jobs.title,
+    jobs.company,
+    jobs.location,
+    jobs.contract_type,
+    jobs.source,
+    jobs.url,
+    jobs.description,
+    jobs.salary,
+    jobs.seniority,
+    jobs.remote_policy,
+    jobs.skills,
+    jobs.raw_payload,
+    COALESCE(indexed.chunk_count, 0) AS indexed_chunks,
+    COALESCE(indexed.chunk_count, 0) > 0 AS is_indexed,
+    jobs.created_at,
+    jobs.updated_at
+"""
+
 
 class JobRepository:
     def __init__(self, *, url: str | None = None) -> None:
@@ -73,16 +93,26 @@ class JobRepository:
             raise RuntimeError("Job insert did not return a row")
         return dict(row)
 
-    def list(self, *, limit: int = 50) -> list[dict[str, Any]]:
+    def list(self, *, limit: int = 50, source: str | None = None, indexed: bool | None = None) -> list[dict[str, Any]]:
         with psycopg.connect(self.url, row_factory=dict_row) as conn:
             rows = conn.execute(
                 f"""
-                SELECT {JOB_COLUMNS}
+                SELECT {JOB_LIST_COLUMNS}
                 FROM jobs
-                ORDER BY created_at DESC
+                LEFT JOIN (
+                    SELECT job_id, count(*) AS chunk_count
+                    FROM job_chunks
+                    GROUP BY job_id
+                ) indexed ON indexed.job_id = jobs.id
+                WHERE (%(source)s::text IS NULL OR jobs.source = %(source)s)
+                    AND (
+                        %(indexed)s::boolean IS NULL
+                        OR %(indexed)s::boolean = (COALESCE(indexed.chunk_count, 0) > 0)
+                    )
+                ORDER BY jobs.created_at DESC
                 LIMIT %(limit)s
                 """,
-                {"limit": limit},
+                {"limit": limit, "source": source, "indexed": indexed},
             ).fetchall()
         return [dict(row) for row in rows]
 
@@ -90,9 +120,14 @@ class JobRepository:
         with psycopg.connect(self.url, row_factory=dict_row) as conn:
             row = conn.execute(
                 f"""
-                SELECT {JOB_COLUMNS}
+                SELECT {JOB_LIST_COLUMNS}
                 FROM jobs
-                WHERE id = %(job_id)s
+                LEFT JOIN (
+                    SELECT job_id, count(*) AS chunk_count
+                    FROM job_chunks
+                    GROUP BY job_id
+                ) indexed ON indexed.job_id = jobs.id
+                WHERE jobs.id = %(job_id)s
                 """,
                 {"job_id": job_id},
             ).fetchone()

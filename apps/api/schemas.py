@@ -36,6 +36,8 @@ class JobRead(BaseModel):
     remote_policy: str | None = None
     skills: list[str]
     raw_payload: dict[str, Any]
+    indexed_chunks: int = 0
+    is_indexed: bool = False
     created_at: datetime
     updated_at: datetime
 
@@ -43,6 +45,37 @@ class JobRead(BaseModel):
 class JobIndexResult(BaseModel):
     job_id: UUID
     chunks_indexed: int
+
+
+class AdzunaImportRequest(BaseModel):
+    country: str = "gb"
+    what: str | None = None
+    where: str | None = None
+    count: int = Field(default=10, ge=1, le=100)
+    index: bool = True
+    results_per_page: int = Field(default=50, ge=1, le=50)
+
+
+class ProviderImportResult(BaseModel):
+    import_run_id: UUID
+    source: str
+    created: int
+    skipped: int
+    indexed: int
+    job_ids: list[UUID]
+
+
+class ProviderImportRunRead(BaseModel):
+    id: UUID
+    provider: str
+    query: dict[str, Any]
+    requested_count: int
+    created_count: int
+    skipped_count: int
+    indexed_count: int
+    status: str
+    error: str | None = None
+    created_at: datetime
 
 
 class ProfileCreate(BaseModel):
