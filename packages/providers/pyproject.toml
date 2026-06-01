@@ -1,0 +1,15 @@
+[project]
+name = "providers"
+version = "0.1.0"
+description = "Shared provider auth and client integrations for scout"
+requires-python = ">=3.13"
+dependencies = [
+    "requests>=2.34.2",
+]
+
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]

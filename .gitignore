@@ -1,0 +1,34 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# Virtual environments
+.venv/
+
+# Frontend dependencies/build output
+node_modules/
+dist/
+
+# Local auth credentials
+.auth/
+
+# Environment files
+.env
+.env.*
+
+# Tool caches
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+.playwright-mcp/
+
+# OS/editor noise
+.DS_Store
+.vscode/
+.idea/

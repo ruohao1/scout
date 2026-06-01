@@ -1,0 +1,154 @@
+from __future__ import annotations
+
+import re
+from dataclasses import asdict, dataclass, field
+
+from rag.types import JobSearchFilters
+
+from .job_ranking import ProfileNotFoundError, rank_jobs_for_profile
+from .job_search import EmptySearchQueryError, search_jobs
+
+
+@dataclass(frozen=True)
+class ChatResult:
+    message: str
+    tool: str
+    jobs: list[dict] = field(default_factory=list)
+    ranked_jobs: list[dict] = field(default_factory=list)
+    warnings: list[str] = field(default_factory=list)
+
+
+def respond_to_chat(
+    *,
+    message: str,
+    profile_id: str | None = None,
+    filters: JobSearchFilters | None = None,
+    limit: int = 5,
+) -> ChatResult:
+    text = message.strip()
+    if not text:
+        return ChatResult(
+            message="Ask me for jobs by role, skill, location, or remote preference.",
+            tool="none",
+            warnings=["Message must not be empty."],
+        )
+
+    merged_filters = _merge_filters(text, filters or JobSearchFilters())
+    if _is_match_intent(text):
+        if not profile_id:
+            return ChatResult(
+                message="Select a profile before asking me to rank or match jobs for you.",
+                tool="rank_jobs_for_profile",
+                warnings=["profile_id is required for matching."],
+            )
+        try:
+            ranked = rank_jobs_for_profile(profile_id, filters=merged_filters, limit=limit)
+        except ProfileNotFoundError:
+            return ChatResult(
+                message="I could not find that profile. Pick an existing profile and try again.",
+                tool="rank_jobs_for_profile",
+                warnings=["Profile not found."],
+            )
+        except Exception as exc:
+            return ChatResult(
+                message="The ranking tool is not ready. Check the database and embedding provider configuration.",
+                tool="rank_jobs_for_profile",
+                warnings=[f"Ranking failed: {exc}"],
+            )
+        if not ranked:
+            return ChatResult(
+                message="I did not find ranked matches for that profile yet. Try importing and indexing mock jobs first.",
+                tool="rank_jobs_for_profile",
+                ranked_jobs=[],
+                warnings=["No ranked jobs found."],
+            )
+        return ChatResult(
+            message=f"I ranked {len(ranked)} jobs for that profile.",
+            tool="rank_jobs_for_profile",
+            ranked_jobs=[asdict(job) for job in ranked],
+        )
+
+    query = _search_query(text)
+    try:
+        jobs = search_jobs(query, filters=merged_filters, limit=limit)
+    except EmptySearchQueryError:
+        return ChatResult(
+            message="Tell me what kind of job, skill, or location you want to search for.",
+            tool="search_jobs",
+            warnings=["Search query must not be empty."],
+        )
+    except Exception as exc:
+        return ChatResult(
+            message="The search tool is not ready. Check the database and embedding provider configuration.",
+            tool="search_jobs",
+            warnings=[f"Search failed: {exc}"],
+        )
+    if not jobs:
+        return ChatResult(
+            message="I did not find matching indexed jobs. Try importing mock jobs with indexing, then search again.",
+            tool="search_jobs",
+            jobs=[],
+            warnings=["No jobs found."],
+        )
+    return ChatResult(
+        message=f"I found {len(jobs)} relevant job matches.",
+        tool="search_jobs",
+        jobs=[asdict(job) for job in jobs],
+    )
+
+
+def _is_match_intent(text: str) -> bool:
+    normalized = text.lower()
+    return any(phrase in normalized for phrase in ("match me", "rank", "best for me", "fit for me", "for my profile"))
+
+
+def _search_query(text: str) -> str:
+    query = re.sub(r"\b(find|search|show|get|list|jobs?|roles?|offers?)\b", " ", text, flags=re.IGNORECASE)
+    query = re.sub(r"\s+", " ", query).strip()
+    return query or text
+
+
+def _merge_filters(text: str, filters: JobSearchFilters) -> JobSearchFilters:
+    normalized = text.lower()
+    return JobSearchFilters(
+        location=filters.location or _first_location(normalized),
+        contract_type=filters.contract_type or _first_contract_type(normalized),
+        company=filters.company,
+        seniority=filters.seniority or _first_seniority(normalized),
+        remote_policy=filters.remote_policy or _first_remote_policy(normalized),
+    )
+
+
+def _first_location(text: str) -> str | None:
+    for location in ("paris", "lyon", "berlin", "amsterdam", "london"):
+        if location in text:
+            return location.title()
+    return None
+
+
+def _first_contract_type(text: str) -> str | None:
+    if "contract" in text or "freelance" in text:
+        return "contract"
+    if "full time" in text or "full-time" in text or "permanent" in text:
+        return "full-time"
+    return None
+
+
+def _first_seniority(text: str) -> str | None:
+    if "senior" in text:
+        return "senior"
+    if "lead" in text:
+        return "lead"
+    if "mid" in text or "middle" in text:
+        return "mid-level"
+    return None
+
+
+def _first_remote_policy(text: str) -> str | None:
+    if "hybrid" in text:
+        return "hybrid"
+    if "onsite" in text or "on-site" in text:
+        return "onsite"
+    if "remote" in text:
+        return "remote"
+    return None

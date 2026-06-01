@@ -1,0 +1,175 @@
+from __future__ import annotations
+
+from datetime import datetime
+from typing import Any, Literal
+from uuid import UUID
+
+from pydantic import BaseModel, Field
+
+
+class JobCreate(BaseModel):
+    title: str
+    description: str
+    company: str | None = None
+    location: str | None = None
+    contract_type: str | None = None
+    source: str | None = "manual"
+    url: str | None = None
+    salary: str | None = None
+    seniority: str | None = None
+    remote_policy: str | None = None
+    skills: list[str] = Field(default_factory=list)
+    raw_payload: dict[str, Any] = Field(default_factory=dict)
+
+
+class JobRead(BaseModel):
+    id: UUID
+    title: str
+    description: str
+    company: str | None = None
+    location: str | None = None
+    contract_type: str | None = None
+    source: str | None = None
+    url: str | None = None
+    salary: str | None = None
+    seniority: str | None = None
+    remote_policy: str | None = None
+    skills: list[str]
+    raw_payload: dict[str, Any]
+    created_at: datetime
+    updated_at: datetime
+
+
+class JobIndexResult(BaseModel):
+    job_id: UUID
+    chunks_indexed: int
+
+
+class ProfileCreate(BaseModel):
+    name: str | None = None
+    cv_text: str
+    target_roles: list[str] = Field(default_factory=list)
+    target_locations: list[str] = Field(default_factory=list)
+    skills: list[str] = Field(default_factory=list)
+    seniority: str | None = None
+    preferred_contract_types: list[str] = Field(default_factory=list)
+    remote_preference: str | None = None
+
+
+class ProfileRead(BaseModel):
+    id: UUID
+    name: str | None = None
+    cv_text: str
+    target_roles: list[str]
+    target_locations: list[str]
+    skills: list[str]
+    seniority: str | None = None
+    preferred_contract_types: list[str]
+    remote_preference: str | None = None
+    created_at: datetime
+    updated_at: datetime
+
+
+class SearchFilters(BaseModel):
+    location: str | None = None
+    contract_type: str | None = None
+    company: str | None = None
+    seniority: str | None = None
+    remote_policy: str | None = None
+
+
+class SearchRequest(BaseModel):
+    query: str
+    filters: SearchFilters = Field(default_factory=SearchFilters)
+    limit: int = Field(default=10, ge=1, le=50)
+
+
+class SearchResult(BaseModel):
+    job_id: UUID
+    chunk_id: UUID
+    chunk_index: int
+    score: float
+    title: str
+    content: str
+    section: str | None = None
+    company: str | None = None
+    location: str | None = None
+    contract_type: str | None = None
+    source: str | None = None
+    url: str | None = None
+    salary: str | None = None
+    seniority: str | None = None
+    remote_policy: str | None = None
+    skills: list[str]
+
+
+class ChatMessage(BaseModel):
+    role: Literal["user", "assistant"]
+    content: str
+
+
+class ChatRequest(BaseModel):
+    message: str
+    history: list[ChatMessage] = Field(default_factory=list)
+    profile_id: UUID | None = None
+    filters: SearchFilters = Field(default_factory=SearchFilters)
+    limit: int = Field(default=5, ge=1, le=10)
+
+
+class ChatResponse(BaseModel):
+    message: str
+    tool: Literal["search_jobs", "rank_jobs_for_profile", "none"]
+    jobs: list[SearchResult] = Field(default_factory=list)
+    ranked_jobs: list["RankedJobResult"] = Field(default_factory=list)
+    warnings: list[str] = Field(default_factory=list)
+
+
+class RankJobsRequest(BaseModel):
+    profile_id: UUID
+    filters: SearchFilters = Field(default_factory=SearchFilters)
+    limit: int = Field(default=10, ge=1, le=50)
+
+
+class RankedJobResult(BaseModel):
+    job_id: UUID
+    title: str
+    final_score: float
+    vector_score: float
+    skill_overlap_score: float
+    location_score: float
+    contract_type_score: float
+    recency_score: float
+    matched_skills: list[str]
+    missing_skills: list[str]
+    evidence: list[SearchResult]
+    company: str | None = None
+    location: str | None = None
+    contract_type: str | None = None
+    url: str | None = None
+
+
+class ExplainRankedJobsRequest(BaseModel):
+    profile_id: UUID
+    filters: SearchFilters = Field(default_factory=SearchFilters)
+    limit: int = Field(default=5, ge=1, le=10)
+    model: str = "gpt-5.5"
+
+
+class ExplainedRankedJobResult(BaseModel):
+    job_id: UUID
+    title: str
+    final_score: float
+    vector_score: float
+    skill_overlap_score: float
+    location_score: float
+    contract_type_score: float
+    recency_score: float
+    matched_skills: list[str]
+    missing_skills: list[str]
+    why_match: str
+    cv_suggestions: list[str]
+    evidence: list[SearchResult]
+    company: str | None = None
+    location: str | None = None
+    contract_type: str | None = None
+    url: str | None = None

@@ -1,0 +1,771 @@
+{
+  "jobs": [
+    {
+      "id": "mock-fixture-backend-001",
+      "role": "Senior Backend Engineer",
+      "company": {
+        "name": "Northstar Labs",
+        "industry": "Developer Tools"
+      },
+      "location": {
+        "city": "Paris",
+        "country": "France",
+        "remote_policy": "hybrid"
+      },
+      "details": {
+        "employment_type": "full-time",
+        "seniority": "senior"
+      },
+      "compensation": {
+        "min": 78000,
+        "max": 98000,
+        "currency": "EUR",
+        "period": "year"
+      },
+      "skills": ["Python", "FastAPI", "PostgreSQL", "Distributed Systems"],
+      "body": {
+        "mission": "Build reliable APIs and internal tooling for teams shipping developer workflows.",
+        "responsibilities": [
+          "Design and operate backend services",
+          "Improve database performance and observability",
+          "Review production changes with a reliability mindset"
+        ],
+        "requirements": [
+          "Strong Python experience",
+          "Production SQL experience",
+          "Ability to own services end to end"
+        ],
+        "benefits": ["Hybrid work", "Learning budget", "Modern engineering stack"]
+      },
+      "apply_url": "https://jobs.example.test/mock-fixture-backend-001"
+    },
+    {
+      "id": "mock-fixture-ml-002",
+      "role": "Machine Learning Engineer",
+      "company": {
+        "name": "Meridian Health",
+        "industry": "Healthcare"
+      },
+      "location": {
+        "city": "Lyon",
+        "country": "France",
+        "remote_policy": "remote"
+      },
+      "details": {
+        "employment_type": "full-time",
+        "seniority": "mid-level"
+      },
+      "compensation": {
+        "min": 68000,
+        "max": 88000,
+        "currency": "EUR",
+        "period": "year"
+      },
+      "skills": ["Python", "Embeddings", "MLOps", "Vector Search"],
+      "body": {
+        "mission": "Turn clinical and operational data into safe retrieval and ranking products.",
+        "responsibilities": [
+          "Evaluate embedding and ranking quality",
+          "Maintain vector search pipelines",
+          "Collaborate with product and data teams"
+        ],
+        "requirements": [
+          "Experience with embeddings or retrieval systems",
+          "Python data tooling experience",
+          "Clear communication around model limitations"
+        ],
+        "benefits": ["Research time", "Health coverage", "Conference budget"]
+      },
+      "apply_url": "https://jobs.example.test/mock-fixture-ml-002"
+    },
+    {
+      "id": "mock-fixture-data-003",
+      "role": "Product Data Analyst",
+      "company": {
+        "name": "Atlas Fintech",
+        "industry": "Fintech"
+      },
+      "location": {
+        "city": "Berlin",
+        "country": "Germany",
+        "remote_policy": "onsite"
+      },
+      "details": {
+        "employment_type": "contract",
+        "seniority": "mid-level"
+      },
+      "compensation": {
+        "min": 550,
+        "max": 750,
+        "currency": "EUR",
+        "period": "day"
+      },
+      "skills": ["SQL", "Python", "Experimentation", "Dashboards"],
+      "body": {
+        "mission": "Help product and growth teams understand customer behavior and funnel quality.",
+        "responsibilities": [
+          "Define product metrics",
+          "Build decision-ready dashboards",
+          "Analyze experiments and activation funnels"
+        ],
+        "requirements": [
+          "Advanced SQL skills",
+          "Product analytics background",
+          "Experience communicating with non-technical stakeholders"
+        ],
+        "benefits": ["High-impact projects", "Autonomous team", "Clear contract scope"]
+      },
+      "apply_url": "https://jobs.example.test/mock-fixture-data-003"
+    },
+    {
+      "id": "mock-fixture-platform-004",
+      "role": "Platform Engineer",
+      "company": {
+        "name": "Cobalt Works",
+        "industry": "Infrastructure"
+      },
+      "location": {
+        "city": "Amsterdam",
+        "country": "Netherlands",
+        "remote_policy": "hybrid"
+      },
+      "details": {
+        "employment_type": "full-time",
+        "seniority": "senior"
+      },
+      "compensation": {
+        "min": 82000,
+        "max": 108000,
+        "currency": "EUR",
+        "period": "year"
+      },
+      "skills": ["Kubernetes", "Python", "Terraform", "Observability"],
+      "body": {
+        "mission": "Improve the internal platform used by engineering teams to deploy and monitor services.",
+        "responsibilities": [
+          "Maintain deployment workflows",
+          "Improve service observability",
+          "Partner with product engineers on reliability"
+        ],
+        "requirements": [
+          "Experience with Kubernetes",
+          "Infrastructure as code experience",
+          "Strong incident analysis habits"
+        ],
+        "benefits": ["On-call compensation", "Home office budget", "Team offsites"]
+      },
+      "apply_url": "https://jobs.example.test/mock-fixture-platform-004"
+    },
+    {
+      "id": "mock-fixture-product-005",
+      "role": "Technical Product Manager",
+      "company": {
+        "name": "Signal Harbor",
+        "industry": "B2B SaaS"
+      },
+      "location": {
+        "city": "London",
+        "country": "United Kingdom",
+        "remote_policy": "remote"
+      },
+      "details": {
+        "employment_type": "full-time",
+        "seniority": "lead"
+      },
+      "compensation": {
+        "min": 90000,
+        "max": 120000,
+        "currency": "GBP",
+        "period": "year"
+      },
+      "skills": ["Product Strategy", "APIs", "Roadmapping", "Customer Discovery"],
+      "body": {
+        "mission": "Lead roadmap decisions for API products used by operations and engineering teams.",
+        "responsibilities": [
+          "Define product strategy for developer-facing workflows",
+          "Translate customer problems into clear requirements",
+          "Coordinate delivery with engineering and design"
+        ],
+        "requirements": [
+          "Technical product management experience",
+          "Strong API product intuition",
+          "Ability to balance discovery and delivery"
+        ],
+        "benefits": ["Remote-first team", "Equity package", "Annual learning stipend"]
+      },
+      "apply_url": "https://jobs.example.test/mock-fixture-product-005"
+    },
+      {
+    "id": "mock-fixture-cyber-006",
+    "role": "Cybersecurity Analyst",
+    "company": {
+      "name": "Redwood Security",
+      "industry": "Cybersecurity"
+    },
+    "location": {
+      "city": "Luxembourg",
+      "country": "Luxembourg",
+      "remote_policy": "hybrid"
+    },
+    "details": {
+      "employment_type": "full-time",
+      "seniority": "junior"
+    },
+    "compensation": {
+      "min": 52000,
+      "max": 68000,
+      "currency": "EUR",
+      "period": "year"
+    },
+    "skills": ["SIEM", "Python", "Incident Response", "Linux"],
+    "body": {
+      "mission": "Monitor security events and support incident response operations for enterprise clients.",
+      "responsibilities": [
+        "Investigate alerts from SIEM and EDR platforms",
+        "Write detection rules and automation scripts",
+        "Document incidents and remediation steps"
+      ],
+      "requirements": [
+        "Basic understanding of network security",
+        "Linux command-line experience",
+        "Ability to analyze logs and communicate findings"
+      ],
+      "benefits": ["Hybrid work", "SOC training", "Certification budget"]
+    },
+    "apply_url": "https://jobs.example.test/mock-fixture-cyber-006"
+  },
+  {
+    "id": "mock-fixture-devsecops-007",
+    "role": "DevSecOps Engineer",
+    "company": {
+      "name": "IronCloud Systems",
+      "industry": "Cloud Infrastructure"
+    },
+    "location": {
+      "city": "Brussels",
+      "country": "Belgium",
+      "remote_policy": "remote"
+    },
+    "details": {
+      "employment_type": "full-time",
+      "seniority": "mid-level"
+    },
+    "compensation": {
+      "min": 72000,
+      "max": 92000,
+      "currency": "EUR",
+      "period": "year"
+    },
+    "skills": ["Kubernetes", "Terraform", "CI/CD", "Container Security"],
+    "body": {
+      "mission": "Embed security controls into cloud-native deployment pipelines.",
+      "responsibilities": [
+        "Harden Kubernetes clusters and CI/CD workflows",
+        "Automate infrastructure security checks",
+        "Collaborate with developers on secure deployment practices"
+      ],
+      "requirements": [
+        "Experience with Kubernetes and Terraform",
+        "Knowledge of container security concepts",
+        "Comfortable scripting in Python or Bash"
+      ],
+      "benefits": ["Remote-first culture", "Cloud certification budget", "Flexible hours"]
+    },
+    "apply_url": "https://jobs.example.test/mock-fixture-devsecops-007"
+  },
+  {
+    "id": "mock-fixture-blockchain-008",
+    "role": "Blockchain Security Engineer",
+    "company": {
+      "name": "LedgerForge",
+      "industry": "Blockchain"
+    },
+    "location": {
+      "city": "Zug",
+      "country": "Switzerland",
+      "remote_policy": "hybrid"
+    },
+    "details": {
+      "employment_type": "full-time",
+      "seniority": "mid-level"
+    },
+    "compensation": {
+      "min": 105000,
+      "max": 140000,
+      "currency": "CHF",
+      "period": "year"
+    },
+    "skills": ["Solidity", "Smart Contract Auditing", "Foundry", "Cryptography"],
+    "body": {
+      "mission": "Review smart contracts and improve the security posture of decentralized applications.",
+      "responsibilities": [
+        "Audit Solidity smart contracts",
+        "Write proof-of-concept exploits for vulnerabilities",
+        "Create internal security tooling for protocol reviews"
+      ],
+      "requirements": [
+        "Experience reading Solidity code",
+        "Understanding of common smart contract vulnerabilities",
+        "Ability to clearly document security findings"
+      ],
+      "benefits": ["Token package", "Audit training", "Conference budget"]
+    },
+    "apply_url": "https://jobs.example.test/mock-fixture-blockchain-008"
+  },
+  {
+    "id": "mock-fixture-rag-009",
+    "role": "RAG Application Engineer",
+    "company": {
+      "name": "VectorLane AI",
+      "industry": "Artificial Intelligence"
+    },
+    "location": {
+      "city": "Montreal",
+      "country": "Canada",
+      "remote_policy": "hybrid"
+    },
+    "details": {
+      "employment_type": "full-time",
+      "seniority": "junior"
+    },
+    "compensation": {
+      "min": 85000,
+      "max": 105000,
+      "currency": "CAD",
+      "period": "year"
+    },
+    "skills": ["Python", "RAG", "PostgreSQL", "Embeddings"],
+    "body": {
+      "mission": "Build retrieval-augmented applications for enterprise knowledge workflows.",
+      "responsibilities": [
+        "Implement document ingestion and chunking pipelines",
+        "Evaluate retrieval quality and answer grounding",
+        "Integrate vector search with backend APIs"
+      ],
+      "requirements": [
+        "Python backend development experience",
+        "Understanding of embeddings and vector search",
+        "Interest in LLM evaluation and observability"
+      ],
+      "benefits": ["Hybrid work", "AI tooling budget", "Mentorship program"]
+    },
+    "apply_url": "https://jobs.example.test/mock-fixture-rag-009"
+  },
+  {
+    "id": "mock-fixture-backend-010",
+    "role": "Backend Software Engineer",
+    "company": {
+      "name": "Nova Payments",
+      "industry": "Fintech"
+    },
+    "location": {
+      "city": "Dublin",
+      "country": "Ireland",
+      "remote_policy": "hybrid"
+    },
+    "details": {
+      "employment_type": "full-time",
+      "seniority": "mid-level"
+    },
+    "compensation": {
+      "min": 70000,
+      "max": 90000,
+      "currency": "EUR",
+      "period": "year"
+    },
+    "skills": ["Go", "PostgreSQL", "Kafka", "Microservices"],
+    "body": {
+      "mission": "Develop reliable payment services and internal financial infrastructure.",
+      "responsibilities": [
+        "Build APIs for transaction processing",
+        "Improve service reliability and observability",
+        "Work with compliance teams on secure data flows"
+      ],
+      "requirements": [
+        "Backend development experience in Go or Python",
+        "Strong SQL knowledge",
+        "Understanding of distributed systems fundamentals"
+      ],
+      "benefits": ["Hybrid work", "Pension contribution", "Engineering learning budget"]
+    },
+    "apply_url": "https://jobs.example.test/mock-fixture-backend-010"
+  },
+  {
+    "id": "mock-fixture-security-intern-011",
+    "role": "Cybersecurity Intern",
+    "company": {
+      "name": "Aegis Digital",
+      "industry": "Cybersecurity"
+    },
+    "location": {
+      "city": "Luxembourg",
+      "country": "Luxembourg",
+      "remote_policy": "hybrid"
+    },
+    "details": {
+      "employment_type": "internship",
+      "seniority": "entry-level"
+    },
+    "compensation": {
+      "min": 1200,
+      "max": 1800,
+      "currency": "EUR",
+      "period": "month"
+    },
+    "skills": ["Linux", "Python", "SIEM", "Network Security"],
+    "body": {
+      "mission": "Support the security operations team with monitoring, automation, and incident triage.",
+      "responsibilities": [
+        "Analyze security alerts",
+        "Write small automation scripts",
+        "Assist with vulnerability management tasks"
+      ],
+      "requirements": [
+        "Interest in cybersecurity",
+        "Basic Linux knowledge",
+        "Ability to document technical findings"
+      ],
+      "benefits": []
+    },
+    "apply_url": "https://jobs.example.test/mock-fixture-security-intern-011"
+  },
+  {
+    "id": "mock-fixture-backend-012",
+    "role": "Backend Developer",
+    "company": {
+      "name": "HelioStack",
+      "industry": ""
+    },
+    "location": {
+      "city": "Toulouse",
+      "country": "France",
+      "remote_policy": "remote"
+    },
+    "details": {
+      "employment_type": "full-time",
+      "seniority": "junior"
+    },
+    "compensation": {
+      "min": 42000,
+      "max": null,
+      "currency": "EUR",
+      "period": "year"
+    },
+    "skills": ["Python", "FastAPI", "Docker"],
+    "body": {
+      "mission": "Build and maintain APIs for internal business workflows.",
+      "responsibilities": [
+        "Develop REST APIs",
+        "Write unit and integration tests",
+        "Improve service monitoring"
+      ],
+      "requirements": [],
+      "benefits": ["Remote work", "Meal vouchers"]
+    },
+    "apply_url": "https://jobs.example.test/mock-fixture-backend-012"
+  },
+  {
+    "id": "mock-fixture-cloud-013",
+    "role": "Cloud Security Engineer",
+    "company": {
+      "name": "",
+      "industry": "Cloud Security"
+    },
+    "location": {
+      "city": "Amsterdam",
+      "country": "Netherlands",
+      "remote_policy": "hybrid"
+    },
+    "details": {
+      "employment_type": "full-time",
+      "seniority": "mid-level"
+    },
+    "compensation": {
+      "min": 76000,
+      "max": 94000,
+      "currency": "EUR",
+      "period": "year"
+    },
+    "skills": ["AWS", "Terraform", "IAM", "Python"],
+    "body": {
+      "mission": "",
+      "responsibilities": [
+        "Review cloud infrastructure security",
+        "Automate compliance checks",
+        "Support incident response investigations"
+      ],
+      "requirements": [
+        "Cloud security experience",
+        "Infrastructure as code knowledge"
+      ],
+      "benefits": ["Training budget", "Flexible hours"]
+    },
+    "apply_url": "https://jobs.example.test/mock-fixture-cloud-013"
+  },
+  {
+    "id": "mock-fixture-data-014",
+    "role": "Data Engineer",
+    "company": {
+      "name": "ClearLake Analytics",
+      "industry": "Data Platform"
+    },
+    "location": {
+      "city": "",
+      "country": "Germany",
+      "remote_policy": "onsite"
+    },
+    "details": {
+      "employment_type": "contract",
+      "seniority": "mid-level"
+    },
+    "compensation": {
+      "min": 500,
+      "max": 700,
+      "currency": "EUR",
+      "period": "day"
+    },
+    "skills": ["SQL", "Python", "Airflow", "PostgreSQL"],
+    "body": {
+      "mission": "Build reliable data pipelines for product and finance teams.",
+      "responsibilities": [
+        "Maintain batch data workflows",
+        "Improve data quality checks",
+        "Document pipeline ownership"
+      ],
+      "requirements": [
+        "Strong SQL skills",
+        "Experience with orchestration tools"
+      ],
+      "benefits": []
+    },
+    "apply_url": ""
+  },
+  {
+    "id": "mock-fixture-ai-015",
+    "role": "LLM Evaluation Engineer",
+    "company": {
+      "name": "PromptWorks AI",
+      "industry": "Artificial Intelligence"
+    },
+    "location": {
+      "city": "Paris",
+      "country": "France",
+      "remote_policy": ""
+    },
+    "details": {
+      "employment_type": "full-time",
+      "seniority": "junior"
+    },
+    "compensation": {
+      "min": null,
+      "max": null,
+      "currency": "EUR",
+      "period": "year"
+    },
+    "skills": ["Python", "LLM Evaluation", "RAG", "Prompt Engineering"],
+    "body": {
+      "mission": "Evaluate LLM outputs for factuality, grounding, and task completion.",
+      "responsibilities": [
+        "Create evaluation datasets",
+        "Analyze retrieval failures",
+        "Write reports on model behavior"
+      ],
+      "requirements": [
+        "Python scripting experience",
+        "Understanding of LLM limitations",
+        "Clear written communication"
+      ],
+      "benefits": ["Research time"]
+    },
+    "apply_url": "https://jobs.example.test/mock-fixture-ai-015"
+  },
+  {
+    "id": "mock-fixture-platform-016",
+    "role": "Platform Reliability Engineer",
+    "company": {
+      "name": "OrbitGrid",
+      "industry": "Infrastructure"
+    },
+    "location": {
+      "city": "Madrid",
+      "country": "Spain",
+      "remote_policy": "remote"
+    },
+    "details": {
+      "employment_type": "",
+      "seniority": "senior"
+    },
+    "compensation": {
+      "min": 80000,
+      "max": 105000,
+      "currency": "EUR",
+      "period": "year"
+    },
+    "skills": [],
+    "body": {
+      "mission": "Improve reliability and observability across internal infrastructure.",
+      "responsibilities": [
+        "Operate Kubernetes workloads",
+        "Improve alerting and dashboards",
+        "Run post-incident reviews"
+      ],
+      "requirements": [
+        "Kubernetes production experience",
+        "Strong troubleshooting skills"
+      ],
+      "benefits": ["Remote work", "Home office budget"]
+    },
+    "apply_url": "https://jobs.example.test/mock-fixture-platform-016"
+  },
+  {
+    "id": "mock-fixture-smart-contract-017",
+    "role": "Smart Contract Auditor",
+    "company": {
+      "name": "ChainSentinel",
+      "industry": "Blockchain Security"
+    },
+    "location": {
+      "city": "London",
+      "country": "United Kingdom",
+      "remote_policy": "remote"
+    },
+    "details": {
+      "employment_type": "full-time",
+      "seniority": ""
+    },
+    "compensation": {
+      "min": 85000,
+      "max": 130000,
+      "currency": "GBP",
+      "period": "year"
+    },
+    "skills": ["Solidity", "Foundry", "Smart Contract Auditing", "DeFi"],
+    "body": {
+      "mission": "Review decentralized finance protocols and identify exploitable vulnerabilities.",
+      "responsibilities": [],
+      "requirements": [
+        "Ability to read Solidity code",
+        "Understanding of reentrancy and access control bugs",
+        "Experience writing proof-of-concept exploits"
+      ],
+      "benefits": ["Remote-first team", "Conference budget"]
+    },
+    "apply_url": "https://jobs.example.test/mock-fixture-smart-contract-017"
+  },
+  {
+    "id": "mock-fixture-soc-018",
+    "role": "",
+    "company": {
+      "name": "BlueRiver Defense",
+      "industry": "Managed Security Services"
+    },
+    "location": {
+      "city": "Brussels",
+      "country": "Belgium",
+      "remote_policy": "onsite"
+    },
+    "details": {
+      "employment_type": "full-time",
+      "seniority": "entry-level"
+    },
+    "compensation": {
+      "min": 38000,
+      "max": 48000,
+      "currency": "EUR",
+      "period": "year"
+    },
+    "skills": ["SIEM", "Windows", "Networking"],
+    "body": {
+      "mission": "Monitor customer environments and escalate confirmed security incidents.",
+      "responsibilities": [
+        "Triage incoming alerts",
+        "Escalate suspicious activity",
+        "Maintain investigation notes"
+      ],
+      "requirements": [
+        "Basic networking knowledge",
+        "Interest in SOC operations"
+      ],
+      "benefits": ["Shift bonus", "Security training"]
+    },
+    "apply_url": "https://jobs.example.test/mock-fixture-soc-018"
+  },
+  {
+    "id": "mock-fixture-fullstack-019",
+    "role": "Full-Stack Engineer",
+    "company": {
+      "name": "MarketPulse",
+      "industry": "Fintech"
+    },
+    "location": {
+      "city": "Berlin",
+      "country": "",
+      "remote_policy": "hybrid"
+    },
+    "details": {
+      "employment_type": "full-time",
+      "seniority": "mid-level"
+    },
+    "compensation": {
+      "min": 65000,
+      "max": 85000,
+      "currency": "",
+      "period": "year"
+    },
+    "skills": ["TypeScript", "React", "Node.js", "PostgreSQL"],
+    "body": {
+      "mission": "Build product features for portfolio analytics and reporting workflows.",
+      "responsibilities": [
+        "Implement frontend and backend features",
+        "Improve API performance",
+        "Collaborate with product and design"
+      ],
+      "requirements": [
+        "Experience with TypeScript",
+        "Good understanding of relational databases"
+      ],
+      "benefits": ["Hybrid work", "Stock options"]
+    },
+    "apply_url": "https://jobs.example.test/mock-fixture-fullstack-019"
+  },
+  {
+    "id": "mock-fixture-mlops-020",
+    "role": "MLOps Engineer",
+    "company": {
+      "name": "ModelFoundry",
+      "industry": "Machine Learning"
+    },
+    "location": {
+      "city": "Copenhagen",
+      "country": "Denmark",
+      "remote_policy": null
+    },
+    "details": {
+      "employment_type": "full-time",
+      "seniority": "mid-level"
+    },
+    "compensation": {
+      "min": 720000,
+      "max": 900000,
+      "currency": "DKK",
+      "period": "year"
+    },
+    "skills": ["Python", "Docker", "Kubernetes", "MLflow"],
+    "body": {
+      "mission": "Maintain machine learning deployment pipelines and model monitoring systems.",
+      "responsibilities": [
+        "Deploy ML services",
+        "Monitor model performance",
+        "Improve reproducibility of training pipelines"
+      ],
+      "requirements": [
+        "Python experience",
+        "Containerization knowledge",
+        "Understanding of ML lifecycle management"
+      ],
+      "benefits": null
+    },
+    "apply_url": "https://jobs.example.test/mock-fixture-mlops-020"
+  }
+  ]
+}

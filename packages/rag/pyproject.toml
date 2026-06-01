@@ -1,0 +1,16 @@
+[project]
+name = "rag"
+version = "0.1.0"
+description = "Retrieval primitives for scout"
+requires-python = ">=3.13"
+dependencies = [
+    "google-genai>=1",
+    "openai>=2",
+]
+
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
