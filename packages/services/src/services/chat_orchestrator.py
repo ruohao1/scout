@@ -4,6 +4,7 @@ import json
 from dataclasses import asdict
 from typing import Any, Protocol
 
+from db.provider_import_runs import ProviderImportRunRepository
 from db.profiles import ProfileRepository
 from langgraph.config import get_stream_writer
 from providers.errors import ProviderHTTPError
@@ -13,6 +14,7 @@ from rag.types import JobSearchFilters
 
 from .chat import ChatResult, respond_to_chat
 from .job_ranking import ProfileNotFoundError, rank_jobs_for_profile
+from .job_providers import JobSpyJobProviderAdapter, JobSpyJobProviderClient, import_jobs
 from .job_search import EmptySearchQueryError, search_jobs
 
 
@@ -150,6 +152,8 @@ def _execute_tool(
         return _search_tool(args, filters=filters, limit=limit)
     if tool_name == "rank_jobs_for_profile":
         return _rank_tool(args, profile_id=profile_id, filters=filters, limit=limit)
+    if tool_name == "fetch_job_offers":
+        return _fetch_job_offers_tool(args, filters=filters, limit=limit)
     if tool_name == "list_profiles":
         return _list_profiles_tool(args)
     if tool_name == "get_profile":
@@ -166,6 +170,73 @@ def _search_tool(args: dict[str, Any], *, filters: JobSearchFilters, limit: int)
     except EmptySearchQueryError as exc:
         return {"ok": False, "tool": "search_jobs", "error": str(exc), "jobs": []}
     return {"ok": True, "tool": "search_jobs", "jobs": [asdict(job) for job in jobs]}
+
+
+def _fetch_job_offers_tool(args: dict[str, Any], *, filters: JobSearchFilters, limit: int) -> dict[str, Any]:
+    search_term = _string_arg(args.get("search_term")) or _string_arg(args.get("query"))
+    if not search_term:
+        return {"ok": False, "tool": "fetch_job_offers", "error": "search_term is required", "jobs": []}
+
+    tool_limit = _limit(args.get("limit"), fallback=limit)
+    count = _offer_count(args.get("count"), fallback=max(10, tool_limit))
+    sites = _sites_arg(args.get("sites"))
+    location = _string_arg(args.get("location")) or filters.location
+    country_indeed = _string_arg(args.get("country_indeed")) or "UK"
+    params = {
+        "search_term": search_term,
+        "location": location,
+        "sites": sites,
+        "count": count,
+        "hours_old": _optional_int(args.get("hours_old")),
+        "is_remote": args.get("is_remote") if isinstance(args.get("is_remote"), bool) else None,
+        "job_type": _string_arg(args.get("job_type")),
+        "country_indeed": country_indeed,
+        "limit": tool_limit,
+    }
+
+    runs = ProviderImportRunRepository()
+    try:
+        result = import_jobs(
+            client=JobSpyJobProviderClient(
+                site_name=sites,
+                search_term=search_term,
+                location=location,
+                job_type=params["job_type"],
+                is_remote=params["is_remote"],
+                hours_old=params["hours_old"],
+                country_indeed=country_indeed,
+            ),
+            adapter=JobSpyJobProviderAdapter(),
+            count=count,
+            should_index=True,
+        )
+    except Exception as exc:
+        _record_jobspy_run(runs, params=params, created=0, skipped=0, indexed=0, status="failed", error=str(exc))
+        return {"ok": False, "tool": "fetch_job_offers", "error": f"JobSpy import failed: {exc}", "jobs": []}
+
+    _record_jobspy_run(
+        runs,
+        params=params,
+        created=len(result.created),
+        skipped=result.skipped,
+        indexed=result.indexed,
+        status="completed",
+        error=None,
+    )
+    try:
+        jobs = search_jobs(search_term, filters=_jobspy_search_filters(filters=filters, location=location, is_remote=params["is_remote"]), limit=tool_limit)
+    except EmptySearchQueryError as exc:
+        return {"ok": False, "tool": "fetch_job_offers", "error": str(exc), "jobs": []}
+
+    return {
+        "ok": True,
+        "tool": "fetch_job_offers",
+        "created": len(result.created),
+        "skipped": result.skipped,
+        "indexed": result.indexed,
+        "job_ids": [job["id"] for job in result.created],
+        "jobs": [asdict(job) for job in jobs],
+    }
 
 
 def _rank_tool(args: dict[str, Any], *, profile_id: str | None, filters: JobSearchFilters, limit: int) -> dict[str, Any]:
@@ -197,14 +268,14 @@ def _get_profile_tool(args: dict[str, Any], *, profile_id: str | None) -> dict[s
 
 
 def _chat_result(*, tool_name: str, tool_result: dict[str, Any], message: str) -> ChatResult:
-    jobs = tool_result.get("jobs") if tool_name == "search_jobs" else []
+    jobs = tool_result.get("jobs") if tool_name in {"search_jobs", "fetch_job_offers"} else []
     ranked_jobs = tool_result.get("ranked_jobs") if tool_name == "rank_jobs_for_profile" else []
     warnings = [] if tool_result.get("ok") else [str(tool_result.get("error") or "Tool failed")]
     count = len(jobs or ranked_jobs or tool_result.get("profiles") or [])
     fallback_message = f"I ran {tool_name} and found {count} result{'s' if count != 1 else ''}."
     return ChatResult(
         message=message.strip() or fallback_message,
-        tool=tool_name if tool_name in {"search_jobs", "rank_jobs_for_profile", "list_profiles", "get_profile"} else "none",
+        tool=tool_name if tool_name in {"search_jobs", "fetch_job_offers", "rank_jobs_for_profile", "list_profiles", "get_profile"} else "none",
         jobs=jobs or [],
         ranked_jobs=ranked_jobs or [],
         warnings=warnings,
@@ -228,7 +299,7 @@ def _emit(event: dict[str, Any]) -> None:
 
 def _public_args(args: dict[str, Any]) -> dict[str, Any]:
     public: dict[str, Any] = {}
-    for key in ("query", "profile_id", "limit", "filters"):
+    for key in ("query", "search_term", "location", "sites", "count", "profile_id", "limit", "filters"):
         if key in args:
             public[key] = args[key]
     return public
@@ -237,6 +308,8 @@ def _public_args(args: dict[str, Any]) -> dict[str, Any]:
 def _tool_summary(tool_name: str, tool_result: dict[str, Any]) -> str:
     if tool_name == "search_jobs":
         return f"Found {len(tool_result.get('jobs') or [])} jobs"
+    if tool_name == "fetch_job_offers":
+        return f"Imported {tool_result.get('created', 0)} jobs and found {len(tool_result.get('jobs') or [])} matches"
     if tool_name == "rank_jobs_for_profile":
         return f"Ranked {len(tool_result.get('ranked_jobs') or [])} jobs"
     if tool_name == "list_profiles":
@@ -289,6 +362,66 @@ def _limit(value: object, *, fallback: int) -> int:
     return fallback
 
 
+def _offer_count(value: object, *, fallback: int) -> int:
+    if isinstance(value, int):
+        return max(1, min(value, 25))
+    return max(1, min(fallback, 25))
+
+
+def _optional_int(value: object) -> int | None:
+    if isinstance(value, int):
+        return value
+    if isinstance(value, str) and value.strip().isdigit():
+        return int(value.strip())
+    return None
+
+
+def _sites_arg(value: object) -> list[str]:
+    supported = {"linkedin", "indeed", "glassdoor", "google", "zip_recruiter", "bayt", "bdjobs", "naukri"}
+    if isinstance(value, str):
+        candidates = [value]
+    elif isinstance(value, list):
+        candidates = [item for item in value if isinstance(item, str)]
+    else:
+        candidates = ["indeed"]
+    sites = [site.strip().lower() for site in candidates if site.strip().lower() in supported]
+    return sites or ["indeed"]
+
+
+def _jobspy_search_filters(*, filters: JobSearchFilters, location: str | None, is_remote: bool | None) -> JobSearchFilters:
+    return JobSearchFilters(
+        location=location or filters.location,
+        contract_type=filters.contract_type,
+        company=filters.company,
+        seniority=filters.seniority,
+        remote_policy="remote" if is_remote is True else filters.remote_policy,
+    )
+
+
+def _record_jobspy_run(
+    runs: ProviderImportRunRepository,
+    *,
+    params: dict[str, Any],
+    created: int,
+    skipped: int,
+    indexed: int,
+    status: str,
+    error: str | None,
+) -> None:
+    runs.create(
+        {
+            "provider": "jobspy",
+            "query": params,
+            "requested_count": int(params.get("count") or 0),
+            "created_count": created,
+            "skipped_count": skipped,
+            "indexed_count": indexed,
+            "status": status,
+            "error": error,
+        }
+    )
+
+
 def _string_arg(value: object) -> str | None:
     return value.strip() if isinstance(value, str) and value.strip() else None
 
@@ -299,6 +432,7 @@ Use tools for profile lookup, semantic job search, and deterministic job ranking
 Do not invent jobs, profiles, scores, database state, or CV facts.
 If a profile is required but missing, use list_profiles or ask for a profile.
 If tools return no results, explain the missing prerequisite and suggest a next action.
+Use fetch_job_offers when the user asks for fresh, current, new, or live job offers that may not already be indexed.
 Keep answers concise and actionable.
 """.strip()
 
@@ -328,6 +462,29 @@ _TOOLS: list[dict[str, Any]] = [
                 "filters": {"type": "object"},
                 "limit": {"type": "integer", "minimum": 1, "maximum": 50},
             },
+        },
+    },
+    {
+        "type": "function",
+        "name": "fetch_job_offers",
+        "description": "Fetch fresh job offers from job boards with JobSpy, index them into the RAG corpus, and return matching jobs.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "search_term": {"type": "string"},
+                "location": {"type": "string"},
+                "sites": {
+                    "type": "array",
+                    "items": {"type": "string", "enum": ["indeed", "google", "zip_recruiter", "linkedin", "glassdoor", "bayt", "bdjobs", "naukri"]},
+                },
+                "count": {"type": "integer", "minimum": 1, "maximum": 25},
+                "hours_old": {"type": "integer", "minimum": 1},
+                "is_remote": {"type": "boolean"},
+                "job_type": {"type": "string", "enum": ["fulltime", "parttime", "internship", "contract"]},
+                "country_indeed": {"type": "string"},
+                "limit": {"type": "integer", "minimum": 1, "maximum": 50},
+            },
+            "required": ["search_term"],
         },
     },
     {

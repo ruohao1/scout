@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import html
 import json
+import math
 import os
 import re
 import urllib.error
@@ -189,6 +190,90 @@ class AdzunaJobProviderAdapter:
         }
 
 
+class JobSpyJobProviderClient:
+    def __init__(
+        self,
+        *,
+        site_name: list[str] | str | None = None,
+        search_term: str | None = None,
+        location: str | None = None,
+        distance: int | None = None,
+        job_type: str | None = None,
+        is_remote: bool | None = None,
+        hours_old: int | None = None,
+        country_indeed: str = "UK",
+        verbose: int = 0,
+    ) -> None:
+        self.site_name = site_name or ["indeed"]
+        self.search_term = search_term
+        self.location = location
+        self.distance = distance
+        self.job_type = job_type
+        self.is_remote = is_remote
+        self.hours_old = hours_old
+        self.country_indeed = country_indeed
+        self.verbose = verbose
+
+    def fetch_jobs(self, *, count: int) -> list[dict[str, Any]]:
+        if count <= 0:
+            return []
+        if not self.search_term:
+            raise ValueError("JobSpy search_term is required")
+
+        try:
+            from jobspy import scrape_jobs
+        except ImportError as exc:
+            raise RuntimeError("JobSpy is not installed. Run `uv sync` to install python-jobspy.") from exc
+
+        params: dict[str, Any] = {
+            "site_name": self.site_name,
+            "search_term": self.search_term,
+            "results_wanted": count,
+            "country_indeed": self.country_indeed,
+            "description_format": "markdown",
+            "verbose": self.verbose,
+        }
+        if self.location:
+            params["location"] = self.location
+        if self.distance is not None:
+            params["distance"] = self.distance
+        if self.job_type:
+            params["job_type"] = self.job_type
+        if self.is_remote is not None:
+            params["is_remote"] = self.is_remote
+        if self.hours_old is not None:
+            params["hours_old"] = self.hours_old
+
+        jobs = scrape_jobs(**params)
+        return [_json_safe(row) for row in jobs.to_dict(orient="records")]
+
+
+class JobSpyJobProviderAdapter:
+    def __init__(self, *, source: str = "jobspy") -> None:
+        self.source = source
+
+    def normalize(self, payload: dict[str, Any]) -> dict[str, Any]:
+        title = _string_value(payload, "title")
+        if not title:
+            raise ValueError("JobSpy job payload is missing title")
+
+        description = _jobspy_description(payload)
+        return {
+            "title": title,
+            "company": _string_value(payload, "company"),
+            "location": _jobspy_location(payload),
+            "contract_type": _string_value(payload, "job_type"),
+            "source": self.source,
+            "url": _jobspy_url(payload),
+            "description": description,
+            "salary": _jobspy_salary(payload),
+            "seniority": _infer_seniority(f"{title}\n{description}"),
+            "remote_policy": _jobspy_remote_policy(payload, f"{title}\n{description}\n{_jobspy_location(payload) or ''}"),
+            "skills": _string_list(payload.get("skills")),
+            "raw_payload": payload,
+        }
+
+
 def import_jobs(
     *,
     client: JobProviderClient,
@@ -336,6 +421,71 @@ def _adzuna_salary(payload: dict[str, Any]) -> str | None:
     return None
 
 
+def _jobspy_description(payload: dict[str, Any]) -> str:
+    description = _clean_text(_string_value(payload, "description") or "")
+    if description:
+        return description
+
+    parts = [_string_value(payload, "title")]
+    company = _string_value(payload, "company")
+    location = _jobspy_location(payload)
+    if company:
+        parts.append(f"Company: {company}")
+    if location:
+        parts.append(f"Location: {location}")
+    return "\n".join(part for part in parts if part) or "Job offer imported from JobSpy."
+
+
+def _jobspy_location(payload: dict[str, Any]) -> str | None:
+    location = _string_value(payload, "location")
+    if location:
+        return location
+    parts = [
+        _string_value(payload, "city"),
+        _string_value(payload, "state"),
+        _string_value(payload, "country"),
+    ]
+    location_parts = [part for part in parts if part]
+    return ", ".join(location_parts) if location_parts else None
+
+
+def _jobspy_url(payload: dict[str, Any]) -> str | None:
+    job_url = _string_value(payload, "job_url")
+    if job_url:
+        return job_url
+    site = _string_value(payload, "site")
+    job_id = _string_value(payload, "id") or _string_value(payload, "job_id")
+    if site and job_id:
+        return f"jobspy:{site}:{job_id}"
+    return None
+
+
+def _jobspy_salary(payload: dict[str, Any]) -> str | None:
+    minimum = _number_value(payload.get("min_amount"))
+    maximum = _number_value(payload.get("max_amount"))
+    interval = _string_value(payload, "interval")
+    currency = _string_value(payload, "currency")
+    suffix = ""
+    if currency:
+        suffix = f" {currency}"
+    if interval:
+        suffix = f"{suffix}/{interval}" if suffix else f"/{interval}"
+    if minimum is not None and maximum is not None:
+        return f"{_format_number(minimum)}-{_format_number(maximum)}{suffix}"
+    if minimum is not None:
+        return f"from {_format_number(minimum)}{suffix}"
+    if maximum is not None:
+        return f"up to {_format_number(maximum)}{suffix}"
+    return None
+
+
+def _jobspy_remote_policy(payload: dict[str, Any], text: str) -> str | None:
+    is_remote = payload.get("is_remote")
+    if isinstance(is_remote, bool):
+        return "remote" if is_remote else _infer_remote_policy(text)
+    return _infer_remote_policy(text)
+
+
 def _infer_seniority(text: str) -> str | None:
     normalized = text.lower()
     if re.search(r"\b(senior|sr\.?|principal|staff)\b", normalized):
@@ -381,6 +531,23 @@ def _format_number(value: float) -> str:
     if value.is_integer():
         return f"{int(value):,}".replace(",", " ")
     return f"{value:,.2f}".replace(",", " ")
+
+
+def _json_safe(value: object) -> Any:
+    if value is None:
+        return None
+    if isinstance(value, float) and math.isnan(value):
+        return None
+    if isinstance(value, str | int | float | bool):
+        return value
+    if isinstance(value, list):
+        return [_json_safe(item) for item in value]
+    if isinstance(value, dict):
+        return {str(key): _json_safe(item) for key, item in value.items()}
+    isoformat = getattr(value, "isoformat", None)
+    if callable(isoformat):
+        return isoformat()
+    return str(value)
 
 
 def _dict_value(payload: dict[str, Any], key: str) -> dict[str, Any]:

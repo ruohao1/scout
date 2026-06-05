@@ -4,7 +4,16 @@ from .cv_parsing import EmptyCVError, InvalidCVFileError, UnsupportedCVFileError
 from .job_explanations import ExplanationParseError, explain_ranked_jobs
 from .job_corpus import JobCorpusStatus, get_job_corpus_status
 from .job_indexing import JobNotFoundError, index_job
-from .job_providers import AdzunaJobProviderAdapter, AdzunaJobProviderClient, JobImportResult, MockJobProviderAdapter, MockJobProviderClient, import_jobs
+from .job_providers import (
+    AdzunaJobProviderAdapter,
+    AdzunaJobProviderClient,
+    JobImportResult,
+    JobSpyJobProviderAdapter,
+    JobSpyJobProviderClient,
+    MockJobProviderAdapter,
+    MockJobProviderClient,
+    import_jobs,
+)
 from .job_ranking import ProfileNotFoundError, rank_jobs_for_profile
 from .job_search import EmptySearchQueryError, search_jobs
 from .job_skills import enrich_job_skills, extract_job_skills
@@ -21,6 +30,8 @@ __all__ = [
     "InvalidCVFileError",
     "JobCorpusStatus",
     "JobImportResult",
+    "JobSpyJobProviderAdapter",
+    "JobSpyJobProviderClient",
     "JobNotFoundError",
     "MockJobProviderAdapter",
     "MockJobProviderClient",

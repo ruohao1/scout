@@ -159,6 +159,7 @@ class ChatResponse(BaseModel):
         "get_job_corpus_status",
         "import_mock_jobs",
         "import_adzuna_jobs",
+        "fetch_job_offers",
         "none",
     ]
     jobs: list[SearchResult] = Field(default_factory=list)
