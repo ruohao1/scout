@@ -11,7 +11,8 @@ from langgraph.graph import END, START, StateGraph
 from rag.types import JobSearchFilters
 
 from .chat import ChatResult
-from .chat_orchestrator import ChatPlanningProvider, respond_to_chat_with_tools
+from .chat_orchestrator import ChatPlanningProvider
+from .chat_orchestrator import respond_to_chat_with_tools
 from .job_corpus import get_job_corpus_status
 from .job_providers import AdzunaJobProviderAdapter, AdzunaJobProviderClient, MockJobProviderAdapter, MockJobProviderClient, import_jobs
 
@@ -42,12 +43,12 @@ def respond_to_chat_with_graph(
     profile_id: str | None = None,
     filters: JobSearchFilters | None = None,
     limit: int = 5,
-    model: str = "gpt-5.5",
+    model: str | None = None,
     provider: ChatPlanningProvider | None = None,
     graph: CompiledWorkflow | None = None,
 ) -> ChatResult:
     workflow = graph or build_job_workflow_graph(provider=provider)
-    state = workflow.invoke(_input_state(message=message, history=history, profile_id=profile_id, filters=filters, limit=limit, model=model))
+    state = workflow.invoke(_input_state(message=message, history=history, profile_id=profile_id, filters=filters, limit=limit, model=model or "gpt-5.5"))
     return _chat_result_from_state(state)
 
 
