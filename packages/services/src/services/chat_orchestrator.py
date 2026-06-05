@@ -2,9 +2,10 @@ from __future__ import annotations
 
 import json
 from dataclasses import asdict
-from typing import Any, Callable, Protocol
+from typing import Any, Protocol
 
 from db.profiles import ProfileRepository
+from langgraph.config import get_stream_writer
 from providers.errors import ProviderHTTPError
 from providers.openai_auth import OpenAIAuthProvider
 from providers.types import GenerateRequest, ProviderMessage
@@ -29,7 +30,6 @@ def respond_to_chat_with_tools(
     limit: int = 5,
     model: str = "gpt-5.5",
     provider: ChatPlanningProvider | None = None,
-    event_callback: Callable[[dict[str, Any]], None] | None = None,
 ) -> ChatResult:
     planner = provider or OpenAIAuthProvider()
     active_filters = filters or JobSearchFilters()
@@ -44,20 +44,20 @@ def respond_to_chat_with_tools(
         )
         tool_call = _first_tool_call(first_response.tool_calls)
         if tool_call is None:
-            _emit(event_callback, {"type": "step_completed", "id": "summarize", "summary": "Answered without using a tool"})
+            _emit({"type": "step_completed", "id": "summarize", "summary": "Answered without using a tool"})
             return ChatResult(message=first_response.text or "What would you like to do next?", tool="none")
 
         tool_name, tool_args = _tool_name(tool_call), _tool_arguments(tool_call)
-        _emit(event_callback, {"type": "tool_started", "id": tool_name or "tool", "tool": tool_name or "unknown", "args": _public_args(tool_args)})
+        _emit({"type": "tool_started", "id": tool_name or "tool", "tool": tool_name or "unknown", "args": _public_args(tool_args)})
         try:
             tool_result = _execute_tool(tool_name, tool_args, profile_id=profile_id, filters=active_filters, limit=limit)
         except Exception as exc:
             tool_result = {"ok": False, "tool": tool_name, "error": _tool_error_message(tool_name, exc), "jobs": [], "ranked_jobs": []}
         if tool_result.get("ok"):
-            _emit(event_callback, {"type": "tool_completed", "id": tool_name or "tool", "summary": _tool_summary(tool_name, tool_result)})
+            _emit({"type": "tool_completed", "id": tool_name or "tool", "summary": _tool_summary(tool_name, tool_result)})
         else:
-            _emit(event_callback, {"type": "tool_failed", "id": tool_name or "tool", "summary": str(tool_result.get("error") or "Tool failed")})
-        _emit(event_callback, {"type": "step_started", "id": "summarize", "title": "Summarize response"})
+            _emit({"type": "tool_failed", "id": tool_name or "tool", "summary": str(tool_result.get("error") or "Tool failed")})
+        _emit({"type": "step_started", "id": "summarize", "title": "Summarize response"})
         final_response = planner.generate(
             GenerateRequest(
                 model=model,
@@ -67,13 +67,13 @@ def respond_to_chat_with_tools(
                 tool_results=[_tool_result_message(tool_call, tool_result)],
             )
         )
-        _emit(event_callback, {"type": "step_completed", "id": "summarize", "summary": "Prepared final answer"})
+        _emit({"type": "step_completed", "id": "summarize", "summary": "Prepared final answer"})
         return _chat_result(tool_name=tool_name, tool_result=tool_result, message=final_response.text)
     except ProviderHTTPError as exc:
-        _emit(event_callback, {"type": "step_completed", "id": "plan", "summary": "AI planner unavailable; using local fallback"})
+        _emit({"type": "step_completed", "id": "plan", "summary": "AI planner unavailable; using local fallback"})
         fallback = respond_to_chat(message=message, profile_id=profile_id, filters=active_filters, limit=limit)
         if fallback.tool != "none":
-            _emit(event_callback, {"type": "tool_completed", "id": fallback.tool, "summary": _fallback_summary(fallback)})
+            _emit({"type": "tool_completed", "id": fallback.tool, "summary": _fallback_summary(fallback)})
         return ChatResult(
             message=fallback.message,
             tool=fallback.tool,
@@ -82,7 +82,7 @@ def respond_to_chat_with_tools(
             warnings=["AI workflow planner unavailable; used local keyword router.", *fallback.warnings, _provider_error_message(exc)],
         )
     except Exception as exc:
-        _emit(event_callback, {"type": "step_completed", "id": "plan", "summary": "AI planner unavailable; using local fallback"})
+        _emit({"type": "step_completed", "id": "plan", "summary": "AI planner unavailable; using local fallback"})
         fallback = respond_to_chat(message=message, profile_id=profile_id, filters=active_filters, limit=limit)
         return ChatResult(
             message=fallback.message,
@@ -219,9 +219,11 @@ def _tool_result_message(tool_call: dict[str, Any], tool_result: dict[str, Any])
     }
 
 
-def _emit(callback: Callable[[dict[str, Any]], None] | None, event: dict[str, Any]) -> None:
-    if callback is not None:
-        callback(event)
+def _emit(event: dict[str, Any]) -> None:
+    try:
+        get_stream_writer()(event)
+    except RuntimeError:
+        return
 
 
 def _public_args(args: dict[str, Any]) -> dict[str, Any]:

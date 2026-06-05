@@ -3,9 +3,10 @@ from __future__ import annotations
 from dataclasses import asdict
 from pathlib import Path
 import re
-from typing import Any, Callable, Protocol, TypedDict
+from typing import Any, Iterator, Protocol, TypedDict
 
 from db.provider_import_runs import ProviderImportRunRepository
+from langgraph.config import get_stream_writer
 from langgraph.graph import END, START, StateGraph
 from rag.types import JobSearchFilters
 
@@ -30,6 +31,9 @@ class CompiledWorkflow(Protocol):
     def invoke(self, input: JobWorkflowState) -> JobWorkflowState:
         ...
 
+    def stream(self, input: JobWorkflowState, **kwargs: Any) -> Iterator[dict[str, Any]]:
+        ...
+
 
 def respond_to_chat_with_graph(
     *,
@@ -41,19 +45,63 @@ def respond_to_chat_with_graph(
     model: str = "gpt-5.5",
     provider: ChatPlanningProvider | None = None,
     graph: CompiledWorkflow | None = None,
-    event_callback: Callable[[dict[str, Any]], None] | None = None,
 ) -> ChatResult:
-    workflow = graph or build_job_workflow_graph(provider=provider, event_callback=event_callback)
-    state = workflow.invoke(
-        {
-            "message": message,
-            "history": history or [],
-            "profile_id": profile_id,
-            "filters": asdict(filters or JobSearchFilters()),
-            "limit": limit,
-            "model": model,
-        }
-    )
+    workflow = graph or build_job_workflow_graph(provider=provider)
+    state = workflow.invoke(_input_state(message=message, history=history, profile_id=profile_id, filters=filters, limit=limit, model=model))
+    return _chat_result_from_state(state)
+
+
+def stream_chat_with_graph(
+    *,
+    message: str,
+    history: list[dict[str, Any]] | None = None,
+    profile_id: str | None = None,
+    filters: JobSearchFilters | None = None,
+    limit: int = 5,
+    model: str = "gpt-5.5",
+    provider: ChatPlanningProvider | None = None,
+    graph: CompiledWorkflow | None = None,
+) -> Iterator[dict[str, Any]]:
+    workflow = graph or build_job_workflow_graph(provider=provider)
+    final_state: JobWorkflowState = {}
+    for chunk in workflow.stream(
+        _input_state(message=message, history=history, profile_id=profile_id, filters=filters, limit=limit, model=model),
+        stream_mode=["updates", "custom"],
+        version="v2",
+    ):
+        if chunk.get("type") == "custom":
+            event = chunk.get("data")
+            if isinstance(event, dict):
+                yield event
+        elif chunk.get("type") == "updates":
+            data = chunk.get("data")
+            if isinstance(data, dict):
+                for update in data.values():
+                    if isinstance(update, dict):
+                        final_state.update(update)
+    yield {"type": "done", "response": asdict(_chat_result_from_state(final_state))}
+
+
+def _input_state(
+    *,
+    message: str,
+    history: list[dict[str, Any]] | None,
+    profile_id: str | None,
+    filters: JobSearchFilters | None,
+    limit: int,
+    model: str,
+) -> JobWorkflowState:
+    return {
+        "message": message,
+        "history": history or [],
+        "profile_id": profile_id,
+        "filters": asdict(filters or JobSearchFilters()),
+        "limit": limit,
+        "model": model,
+    }
+
+
+def _chat_result_from_state(state: JobWorkflowState) -> ChatResult:
     result = state.get("result") or {}
     return ChatResult(
         message=str(result.get("message") or "What would you like to do next?"),
@@ -64,23 +112,16 @@ def respond_to_chat_with_graph(
     )
 
 
-def build_job_workflow_graph(*, provider: ChatPlanningProvider | None = None, event_callback: Callable[[dict[str, Any]], None] | None = None):
+def build_job_workflow_graph(*, provider: ChatPlanningProvider | None = None):
     builder = StateGraph(JobWorkflowState)
 
     def check_corpus(state: JobWorkflowState) -> dict[str, Any]:
-        _emit(event_callback, {"type": "step_started", "id": "check_corpus", "title": "Check job corpus"})
+        _emit({"type": "step_started", "id": "check_corpus", "title": "Check job corpus"})
         try:
             status = asdict(get_job_corpus_status())
         except Exception as exc:
             status = {"total_jobs": 0, "indexed_jobs": 0, "unindexed_jobs": 0, "source": None, "error": str(exc)}
-        _emit(
-            event_callback,
-            {
-                "type": "step_completed",
-                "id": "check_corpus",
-                "summary": f"{status.get('total_jobs', 0)} jobs, {status.get('indexed_jobs', 0)} indexed",
-            },
-        )
+        _emit({"type": "step_completed", "id": "check_corpus", "summary": f"{status.get('total_jobs', 0)} jobs, {status.get('indexed_jobs', 0)} indexed"})
         return {"corpus_status": status}
 
     def route_initial(state: JobWorkflowState) -> str:
@@ -105,8 +146,8 @@ def build_job_workflow_graph(*, provider: ChatPlanningProvider | None = None, ev
         return "plan_and_run"
 
     def corpus_status_response(state: JobWorkflowState) -> dict[str, Any]:
-        _emit(event_callback, {"type": "step_started", "id": "summarize", "title": "Summarize corpus status"})
-        _emit(event_callback, {"type": "tool_started", "id": "get_job_corpus_status", "tool": "get_job_corpus_status", "args": {}})
+        _emit({"type": "step_started", "id": "summarize", "title": "Summarize corpus status"})
+        _emit({"type": "tool_started", "id": "get_job_corpus_status", "tool": "get_job_corpus_status", "args": {}})
         status = state.get("corpus_status") or {}
         message = (
             f"Scout has {status.get('total_jobs', 0)} jobs, "
@@ -114,19 +155,19 @@ def build_job_workflow_graph(*, provider: ChatPlanningProvider | None = None, ev
             f"{status.get('unindexed_jobs', 0)} unindexed jobs."
         )
         warnings = [str(status["error"])] if status.get("error") else []
-        _emit(event_callback, {"type": "tool_completed", "id": "get_job_corpus_status", "summary": "Read corpus status"})
-        _emit(event_callback, {"type": "step_completed", "id": "summarize", "summary": "Prepared corpus summary"})
+        _emit({"type": "tool_completed", "id": "get_job_corpus_status", "summary": "Read corpus status"})
+        _emit({"type": "step_completed", "id": "summarize", "summary": "Prepared corpus summary"})
         return {"result": {"message": message, "tool": "get_job_corpus_status", "jobs": [], "ranked_jobs": [], "warnings": warnings}}
 
     def request_mock_import_confirmation(state: JobWorkflowState) -> dict[str, Any]:
-        _emit(event_callback, {"type": "step_started", "id": "confirm_import", "title": "Request import confirmation"})
+        _emit({"type": "step_started", "id": "confirm_import", "title": "Request import confirmation"})
         status = state.get("corpus_status") or {}
         message = (
             "I can import and index 10 mock jobs so Scout has a searchable local corpus. "
             f"Current corpus: {status.get('total_jobs', 0)} jobs, {status.get('indexed_jobs', 0)} indexed. "
             "Reply yes to proceed."
         )
-        _emit(event_callback, {"type": "step_completed", "id": "confirm_import", "summary": "Waiting for user confirmation"})
+        _emit({"type": "step_completed", "id": "confirm_import", "summary": "Waiting for user confirmation"})
         return {
             "result": {
                 "message": message,
@@ -138,8 +179,8 @@ def build_job_workflow_graph(*, provider: ChatPlanningProvider | None = None, ev
         }
 
     def import_mock_jobs_node(state: JobWorkflowState) -> dict[str, Any]:
-        _emit(event_callback, {"type": "step_started", "id": "import_mock_jobs", "title": "Import mock jobs"})
-        _emit(event_callback, {"type": "tool_started", "id": "import_mock_jobs", "tool": "import_mock_jobs", "args": {"count": 10, "index": True}})
+        _emit({"type": "step_started", "id": "import_mock_jobs", "title": "Import mock jobs"})
+        _emit({"type": "tool_started", "id": "import_mock_jobs", "tool": "import_mock_jobs", "args": {"count": 10, "index": True}})
         try:
             result = import_jobs(
                 client=MockJobProviderClient(fixture_path=_mock_fixture_path()),
@@ -148,8 +189,8 @@ def build_job_workflow_graph(*, provider: ChatPlanningProvider | None = None, ev
                 should_index=True,
             )
         except Exception as exc:
-            _emit(event_callback, {"type": "tool_failed", "id": "import_mock_jobs", "summary": str(exc)})
-            _emit(event_callback, {"type": "step_failed", "id": "import_mock_jobs", "summary": "Mock import failed"})
+            _emit({"type": "tool_failed", "id": "import_mock_jobs", "summary": str(exc)})
+            _emit({"type": "step_failed", "id": "import_mock_jobs", "summary": "Mock import failed"})
             return {
                 "result": {
                     "message": "I could not import and index mock jobs. Check the database and embedding provider configuration.",
@@ -160,12 +201,12 @@ def build_job_workflow_graph(*, provider: ChatPlanningProvider | None = None, ev
                 }
             }
         message = f"Imported {len(result.created)} mock jobs, skipped {result.skipped} duplicates, and indexed {result.indexed} jobs."
-        _emit(event_callback, {"type": "tool_completed", "id": "import_mock_jobs", "summary": message})
-        _emit(event_callback, {"type": "step_completed", "id": "import_mock_jobs", "summary": message})
+        _emit({"type": "tool_completed", "id": "import_mock_jobs", "summary": message})
+        _emit({"type": "step_completed", "id": "import_mock_jobs", "summary": message})
         return {"result": {"message": message, "tool": "import_mock_jobs", "jobs": [], "ranked_jobs": [], "warnings": []}}
 
     def request_adzuna_import_confirmation(state: JobWorkflowState) -> dict[str, Any]:
-        _emit(event_callback, {"type": "step_started", "id": "confirm_adzuna_import", "title": "Request Adzuna import confirmation"})
+        _emit({"type": "step_started", "id": "confirm_adzuna_import", "title": "Request Adzuna import confirmation"})
         params = _adzuna_import_params_from_state(state)
         query = _format_adzuna_query(params)
         message = (
@@ -176,7 +217,7 @@ def build_job_workflow_graph(*, provider: ChatPlanningProvider | None = None, ev
             f'Confirmation details: confirm_import_adzuna_jobs country={params["country"]}; '
             f'what={params.get("what") or ""}; where={params.get("where") or ""}; count={params["count"]}.'
         )
-        _emit(event_callback, {"type": "step_completed", "id": "confirm_adzuna_import", "summary": "Waiting for user confirmation"})
+        _emit({"type": "step_completed", "id": "confirm_adzuna_import", "summary": "Waiting for user confirmation"})
         return {
             "result": {
                 "message": message,
@@ -188,9 +229,9 @@ def build_job_workflow_graph(*, provider: ChatPlanningProvider | None = None, ev
         }
 
     def import_adzuna_jobs_node(state: JobWorkflowState) -> dict[str, Any]:
-        _emit(event_callback, {"type": "step_started", "id": "import_adzuna_jobs", "title": "Import Adzuna jobs"})
+        _emit({"type": "step_started", "id": "import_adzuna_jobs", "title": "Import Adzuna jobs"})
         params = _adzuna_import_params_from_state(state)
-        _emit(event_callback, {"type": "tool_started", "id": "import_adzuna_jobs", "tool": "import_adzuna_jobs", "args": params})
+        _emit({"type": "tool_started", "id": "import_adzuna_jobs", "tool": "import_adzuna_jobs", "args": params})
         runs = ProviderImportRunRepository()
         try:
             result = import_jobs(
@@ -206,8 +247,8 @@ def build_job_workflow_graph(*, provider: ChatPlanningProvider | None = None, ev
             )
         except Exception as exc:
             _record_adzuna_run(runs, params=params, created=0, skipped=0, indexed=0, status="failed", error=str(exc))
-            _emit(event_callback, {"type": "tool_failed", "id": "import_adzuna_jobs", "summary": str(exc)})
-            _emit(event_callback, {"type": "step_failed", "id": "import_adzuna_jobs", "summary": "Adzuna import failed"})
+            _emit({"type": "tool_failed", "id": "import_adzuna_jobs", "summary": str(exc)})
+            _emit({"type": "step_failed", "id": "import_adzuna_jobs", "summary": "Adzuna import failed"})
             return {
                 "result": {
                     "message": "I could not import and index Adzuna jobs. Check Adzuna credentials, the database, and embedding provider configuration.",
@@ -228,12 +269,12 @@ def build_job_workflow_graph(*, provider: ChatPlanningProvider | None = None, ev
             error=None,
         )
         message = f"Imported {len(result.created)} Adzuna jobs, skipped {result.skipped} duplicates, and indexed {result.indexed} jobs."
-        _emit(event_callback, {"type": "tool_completed", "id": "import_adzuna_jobs", "summary": message})
-        _emit(event_callback, {"type": "step_completed", "id": "import_adzuna_jobs", "summary": message})
+        _emit({"type": "tool_completed", "id": "import_adzuna_jobs", "summary": message})
+        _emit({"type": "step_completed", "id": "import_adzuna_jobs", "summary": message})
         return {"result": {"message": message, "tool": "import_adzuna_jobs", "jobs": [], "ranked_jobs": [], "warnings": []}}
 
     def plan_and_run(state: JobWorkflowState) -> dict[str, Any]:
-        _emit(event_callback, {"type": "step_started", "id": "plan", "title": "Plan next action"})
+        _emit({"type": "step_started", "id": "plan", "title": "Plan next action"})
         result = respond_to_chat_with_tools(
             message=state.get("message", ""),
             history=state.get("history") or [],
@@ -242,9 +283,8 @@ def build_job_workflow_graph(*, provider: ChatPlanningProvider | None = None, ev
             limit=int(state.get("limit") or 5),
             model=state.get("model") or "gpt-5.5",
             provider=provider,
-            event_callback=event_callback,
         )
-        _emit(event_callback, {"type": "step_completed", "id": "plan", "summary": f"Used {result.tool}" if result.tool != "none" else "Answered without a tool"})
+        _emit({"type": "step_completed", "id": "plan", "summary": f"Used {result.tool}" if result.tool != "none" else "Answered without a tool"})
         return {"result": asdict(result)}
 
     builder.add_node("check_corpus", check_corpus)
@@ -295,9 +335,11 @@ def _string_list(value: object) -> list[str]:
     return [item for item in value if isinstance(item, str)]
 
 
-def _emit(callback: Callable[[dict[str, Any]], None] | None, event: dict[str, Any]) -> None:
-    if callback is not None:
-        callback(event)
+def _emit(event: dict[str, Any]) -> None:
+    try:
+        get_stream_writer()(event)
+    except RuntimeError:
+        return
 
 
 def _is_corpus_status_request(message: str) -> bool:
