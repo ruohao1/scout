@@ -1,0 +1,46 @@
+import { useEffect, useState } from 'react'
+import { formatActivityArgs } from './chatStreamReducer.js'
+
+export function ActivityTimeline({ activities, status, collapsed }) {
+  const [isCollapsed, setIsCollapsed] = useState(Boolean(collapsed))
+  const toolCount = activities.filter((activity) => activity.kind === 'tool').length
+  const hasRunning = status === 'running' || activities.some((activity) => activity.status === 'running')
+
+  useEffect(() => {
+    setIsCollapsed(Boolean(collapsed))
+  }, [collapsed])
+
+  return (
+    <div className="activity-card" data-running={hasRunning}>
+      <button className="activity-summary" type="button" onClick={() => setIsCollapsed((current) => !current)} aria-expanded={!isCollapsed}>
+        <span className="activity-pulse" data-status={hasRunning ? 'running' : status || 'completed'} />
+        <strong>{hasRunning ? 'Scout is working' : `Scout used ${toolCount} tool${toolCount === 1 ? '' : 's'}`}</strong>
+        <small>{isCollapsed ? 'Show trace' : 'Hide trace'}</small>
+      </button>
+
+      {!isCollapsed && (
+        <div className="activity-list">
+          {activities.map((activity) => (
+            <ActivityRow key={`${activity.kind}-${activity.id}`} activity={activity} />
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function ActivityRow({ activity }) {
+  return (
+    <div className="activity-row" data-kind={activity.kind} data-status={activity.status}>
+      <span className="activity-marker" aria-hidden="true" />
+      <div>
+        <div className="activity-row-title">
+          <strong>{activity.title}</strong>
+          <small>{activity.kind}</small>
+        </div>
+        {activity.args && <code>{formatActivityArgs(activity.args)}</code>}
+        {activity.summary && <p>{activity.summary}</p>}
+      </div>
+    </div>
+  )
+}
