@@ -151,7 +151,7 @@ Jobs must be indexed before `/search`, `/rank-jobs`, or `/rank-jobs/explain` can
 
 The LLM chooses workflow steps and writes the final response, but deterministic services own database reads, retrieval, and ranking scores.
 
-The graph can report corpus status and can import/index mock jobs after an explicit user confirmation. Real provider import remains outside chat for now.
+The graph can report corpus status and can import/index mock or Adzuna jobs after an explicit user confirmation. Adzuna imports require `ADZUNA_APP_ID` and `ADZUNA_APP_KEY`, index imported jobs by default, and record provider import runs.
 
 ## Health
 

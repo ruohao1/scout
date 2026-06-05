@@ -17,6 +17,49 @@ export async function sendChatMessage(payload) {
   return response.json()
 }
 
+export async function sendChatMessageStream(payload, onEvent) {
+  const response = await fetch(`${API_BASE_URL}/chat/stream`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(payload),
+  })
+
+  if (!response.ok) {
+    const message = await response.text()
+    throw new Error(message || `Chat stream failed with HTTP ${response.status}`)
+  }
+
+  if (!response.body) {
+    throw new Error('Chat stream did not return a readable body')
+  }
+
+  const reader = response.body.getReader()
+  const decoder = new TextDecoder()
+  let buffer = ''
+
+  while (true) {
+    const { value, done } = await reader.read()
+    if (done) break
+    buffer += decoder.decode(value, { stream: true })
+    const events = buffer.split('\n\n')
+    buffer = events.pop() || ''
+    for (const eventText of events) {
+      const dataLine = eventText.split('\n').find((line) => line.startsWith('data: '))
+      if (!dataLine) continue
+      onEvent(JSON.parse(dataLine.slice(6)))
+    }
+  }
+
+  if (buffer.trim()) {
+    const dataLine = buffer.split('\n').find((line) => line.startsWith('data: '))
+    if (dataLine) {
+      onEvent(JSON.parse(dataLine.slice(6)))
+    }
+  }
+}
+
 export async function listJobs({ limit = 50 } = {}) {
   const params = new URLSearchParams({ limit: String(limit) })
   const response = await fetch(`${API_BASE_URL}/jobs?${params.toString()}`)

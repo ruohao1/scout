@@ -3,7 +3,7 @@ import { AppSidebar } from '@/components/app-sidebar'
 import { SidebarInset, SidebarProvider } from '@/components/ui/sidebar'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { PanelLeftCloseIcon, PanelLeftOpenIcon } from 'lucide-react'
-import { createProfile, listJobs, listProfiles, rankJobsForProfile, sendChatMessage, uploadProfile } from './api.js'
+import { createProfile, listJobs, listProfiles, rankJobsForProfile, sendChatMessageStream, uploadProfile } from './api.js'
 
 const initialMessages = [
   {
@@ -148,9 +148,30 @@ function App() {
     setDraft('')
     setIsSending(true)
 
+    const assistantId = crypto.randomUUID()
+    updateThread(activeThread.id, (thread) => ({
+      ...thread,
+      detail: 'Scout is working...',
+      messages: [
+        ...thread.messages,
+        {
+          id: assistantId,
+          role: 'assistant',
+          content: '',
+          tool: 'none',
+          jobs: [],
+          rankedJobs: [],
+          warnings: [],
+          status: 'running',
+          activities: [],
+          activityCollapsed: false,
+        },
+      ],
+    }))
+
     try {
       const history = [...messages, userMessage]
-      const response = await sendChatMessage({
+      const payload = {
         message: content,
         history: history
           .filter((message) => message.role === 'user' || message.role === 'assistant')
@@ -164,28 +185,27 @@ function App() {
           remote_policy: null,
         },
         limit: 5,
+      }
+
+      await sendChatMessageStream(payload, (event) => {
+        updateThread(activeThread.id, (thread) => applyChatStreamEvent(thread, assistantId, event))
       })
-      updateThread(activeThread.id, (thread) => ({
-        ...thread,
-        detail: response.message,
-        messages: [...thread.messages, assistantMessage(response)],
-      }))
     } catch (error) {
       updateThread(activeThread.id, (thread) => ({
         ...thread,
         detail: 'The chat endpoint did not respond.',
-        messages: [
-          ...thread.messages,
-          {
-            id: crypto.randomUUID(),
-            role: 'assistant',
-            content: `The chat endpoint did not respond: ${error.message}`,
-            tool: 'none',
-            jobs: [],
-            rankedJobs: [],
-            warnings: ['Check that the FastAPI server is running and CORS is configured.'],
-          },
-        ],
+        messages: thread.messages.map((message) =>
+          message.id === assistantId
+            ? {
+                ...message,
+                content: `The chat stream stopped unexpectedly: ${error.message}`,
+                status: 'failed',
+                activityCollapsed: false,
+                warnings: ['Check that the FastAPI server is running and CORS is configured.'],
+                activities: failRunningActivities(message.activities || [], error.message),
+              }
+            : message,
+        ),
       }))
     } finally {
       setIsSending(false)
@@ -879,7 +899,6 @@ function ChatView({ messages, draft, isSending, selectedProfile, onDraftChange, 
         {messages.map((message) => (
           <ChatMessage key={message.id} message={message} />
         ))}
-        {isSending && <p className="thinking">Scout is thinking...</p>}
       </div>
 
       <form
@@ -921,7 +940,8 @@ function ChatMessage({ message }) {
         <span>{message.role === 'user' ? 'You' : 'Scout'}</span>
         {message.tool && <code>{message.tool}</code>}
       </div>
-      <p>{message.content}</p>
+      {message.activities?.length > 0 && <ActivityTimeline activities={message.activities} status={message.status} collapsed={message.activityCollapsed} />}
+      {message.content && <p>{message.content}</p>}
       {message.warnings?.map((warning) => (
         <div className="warning" key={warning}>
           {warning}
@@ -936,6 +956,58 @@ function ChatMessage({ message }) {
       )}
     </article>
   )
+}
+
+function ActivityTimeline({ activities, status, collapsed }) {
+  const [isCollapsed, setIsCollapsed] = useState(Boolean(collapsed))
+  const toolCount = activities.filter((activity) => activity.kind === 'tool').length
+  const hasRunning = status === 'running' || activities.some((activity) => activity.status === 'running')
+
+  useEffect(() => {
+    setIsCollapsed(Boolean(collapsed))
+  }, [collapsed])
+
+  return (
+    <div className="activity-card" data-running={hasRunning}>
+      <button className="activity-summary" type="button" onClick={() => setIsCollapsed((current) => !current)} aria-expanded={!isCollapsed}>
+        <span className="activity-pulse" data-status={hasRunning ? 'running' : status || 'completed'} />
+        <strong>{hasRunning ? 'Scout is working' : `Scout used ${toolCount} tool${toolCount === 1 ? '' : 's'}`}</strong>
+        <small>{isCollapsed ? 'Show trace' : 'Hide trace'}</small>
+      </button>
+
+      {!isCollapsed && (
+        <div className="activity-list">
+          {activities.map((activity) => (
+            <ActivityRow key={`${activity.kind}-${activity.id}`} activity={activity} />
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function ActivityRow({ activity }) {
+  return (
+    <div className="activity-row" data-kind={activity.kind} data-status={activity.status}>
+      <span className="activity-marker" aria-hidden="true" />
+      <div>
+        <div className="activity-row-title">
+          <strong>{activity.title}</strong>
+          <small>{activity.kind}</small>
+        </div>
+        {activity.args && <code>{formatActivityArgs(activity.args)}</code>}
+        {activity.summary && <p>{activity.summary}</p>}
+      </div>
+    </div>
+  )
+}
+
+function formatActivityArgs(args) {
+  const entries = Object.entries(args).filter(([, value]) => value !== null && value !== undefined && value !== '')
+  if (!entries.length) return '{}'
+  return entries
+    .map(([key, value]) => `${key}=${typeof value === 'object' ? JSON.stringify(value) : JSON.stringify(value)}`)
+    .join(' ')
 }
 
 function JobCard({ job, ranked }) {
@@ -979,6 +1051,112 @@ function assistantMessage(response) {
     rankedJobs: response.ranked_jobs || [],
     warnings: response.warnings || [],
   }
+}
+
+function applyChatStreamEvent(thread, assistantId, event) {
+  if (event.type === 'done') {
+    const response = event.response || {}
+    return {
+      ...thread,
+      detail: response.message || 'Scout finished.',
+      messages: thread.messages.map((message) =>
+        message.id === assistantId
+          ? {
+              ...message,
+              content: response.message || '',
+              tool: response.tool || 'none',
+              jobs: response.jobs || [],
+              rankedJobs: response.ranked_jobs || [],
+              warnings: response.warnings || [],
+              status: 'completed',
+              activityCollapsed: true,
+              activities: completeRunningActivities(message.activities || []),
+            }
+          : message,
+      ),
+    }
+  }
+
+  if (event.type === 'error') {
+    return {
+      ...thread,
+      detail: 'The chat stream failed.',
+      messages: thread.messages.map((message) =>
+        message.id === assistantId
+          ? {
+              ...message,
+              content: event.message || 'The chat stream failed.',
+              status: 'failed',
+              activityCollapsed: false,
+              activities: failRunningActivities(message.activities || [], event.message || 'Stream failed'),
+            }
+          : message,
+      ),
+    }
+  }
+
+  return {
+    ...thread,
+    messages: thread.messages.map((message) =>
+      message.id === assistantId
+        ? {
+            ...message,
+            activities: applyActivityEvent(message.activities || [], event),
+          }
+        : message,
+    ),
+  }
+}
+
+function applyActivityEvent(activities, event) {
+  if (event.type?.startsWith('step_')) {
+    const status = event.type === 'step_started' ? 'running' : event.type === 'step_failed' ? 'failed' : 'completed'
+    return upsertActivity(activities, {
+      id: event.id,
+      kind: 'step',
+      title: event.title || activityTitle(event.id),
+      summary: event.summary || '',
+      status,
+    })
+  }
+
+  if (event.type?.startsWith('tool_')) {
+    const status = event.type === 'tool_started' ? 'running' : event.type === 'tool_failed' ? 'failed' : 'completed'
+    return upsertActivity(activities, {
+      id: event.id,
+      kind: 'tool',
+      title: event.tool || event.id,
+      args: event.args || null,
+      summary: event.summary || '',
+      status,
+    })
+  }
+
+  return activities
+}
+
+function upsertActivity(activities, next) {
+  const index = activities.findIndex((activity) => activity.id === next.id && activity.kind === next.kind)
+  if (index === -1) return [...activities, next]
+  return activities.map((activity, currentIndex) => (currentIndex === index ? { ...activity, ...next } : activity))
+}
+
+function completeRunningActivities(activities) {
+  return activities.map((activity) => (activity.status === 'running' ? { ...activity, status: 'completed' } : activity))
+}
+
+function failRunningActivities(activities, summary) {
+  if (!activities.length) {
+    return [{ id: 'stream', kind: 'step', title: 'Connect to Scout', status: 'failed', summary }]
+  }
+  return activities.map((activity) => (activity.status === 'running' ? { ...activity, status: 'failed', summary } : activity))
+}
+
+function activityTitle(id) {
+  return String(id || 'step')
+    .split('_')
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ')
 }
 
 function threadTitle(content) {

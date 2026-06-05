@@ -151,7 +151,16 @@ class ChatRequest(BaseModel):
 
 class ChatResponse(BaseModel):
     message: str
-    tool: Literal["search_jobs", "rank_jobs_for_profile", "list_profiles", "get_profile", "get_job_corpus_status", "import_mock_jobs", "none"]
+    tool: Literal[
+        "search_jobs",
+        "rank_jobs_for_profile",
+        "list_profiles",
+        "get_profile",
+        "get_job_corpus_status",
+        "import_mock_jobs",
+        "import_adzuna_jobs",
+        "none",
+    ]
     jobs: list[SearchResult] = Field(default_factory=list)
     ranked_jobs: list["RankedJobResult"] = Field(default_factory=list)
     warnings: list[str] = Field(default_factory=list)

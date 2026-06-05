@@ -9,6 +9,9 @@ from .job_ranking import ProfileNotFoundError, rank_jobs_for_profile
 from .job_search import EmptySearchQueryError, search_jobs
 
 
+NO_TOOL_INTENTS = {"chat", "help", "vague_search"}
+
+
 @dataclass(frozen=True)
 class ChatResult:
     message: str
@@ -32,9 +35,12 @@ def respond_to_chat(
             tool="none",
             warnings=["Message must not be empty."],
         )
+    intent = classify_chat_intent(text)
+    if intent in NO_TOOL_INTENTS:
+        return ChatResult(message=no_tool_message(intent), tool="none")
 
     merged_filters = _merge_filters(text, filters or JobSearchFilters())
-    if _is_match_intent(text):
+    if intent == "rank":
         if not profile_id:
             return ChatResult(
                 message="Select a profile before asking me to rank or match jobs for you.",
@@ -68,6 +74,9 @@ def respond_to_chat(
             ranked_jobs=[asdict(job) for job in ranked],
         )
 
+    if intent != "search":
+        return ChatResult(message=no_tool_message("chat"), tool="none")
+
     query = _search_query(text)
     try:
         jobs = search_jobs(query, filters=merged_filters, limit=limit)
@@ -97,9 +106,89 @@ def respond_to_chat(
     )
 
 
+def classify_chat_intent(text: str) -> str:
+    if _is_greeting(text) or _is_small_talk(text):
+        return "chat"
+    if _is_help_request(text):
+        return "help"
+    if _is_match_intent(text):
+        return "rank"
+    if _is_search_intent(text):
+        return "search" if _has_search_details(text) else "vague_search"
+    return "chat"
+
+
+def no_tool_message(intent: str) -> str:
+    return "AI chat is unavailable because OpenAI auth is not configured. Log in with `uv run python main.py auth openai login --no-browser`, then try again."
+
+
 def _is_match_intent(text: str) -> bool:
     normalized = text.lower()
     return any(phrase in normalized for phrase in ("match me", "rank", "best for me", "fit for me", "for my profile"))
+
+
+def _is_greeting(text: str) -> bool:
+    normalized = _normalized_text(text)
+    greetings = {"hello", "hi", "hey", "hiya", "yo", "good morning", "good afternoon", "good evening", "salut", "bonjour", "bonsoir", "coucou"}
+    return normalized in greetings or any(normalized == f"{greeting} scout" for greeting in greetings)
+
+
+def _is_small_talk(text: str) -> bool:
+    normalized = _normalized_text(text)
+    return normalized in {"thanks", "thank you", "ok", "okay", "cool", "nice", "great", "bye", "goodbye"}
+
+
+def _is_help_request(text: str) -> bool:
+    normalized = _normalized_text(text)
+    return any(
+        phrase in normalized
+        for phrase in (
+            "what can you do",
+            "help",
+            "capabilities",
+            "how does this work",
+            "how can you help",
+            "what do you do",
+        )
+    )
+
+
+def _is_search_intent(text: str) -> bool:
+    normalized = _normalized_text(text)
+    return any(word in normalized.split() for word in ("find", "search", "show", "get", "list")) and any(
+        word in normalized.split() for word in ("job", "jobs", "role", "roles", "offer", "offers")
+    )
+
+
+def _has_search_details(text: str) -> bool:
+    normalized = _normalized_text(text)
+    generic = {
+        "find",
+        "search",
+        "show",
+        "get",
+        "list",
+        "for",
+        "a",
+        "an",
+        "the",
+        "job",
+        "jobs",
+        "role",
+        "roles",
+        "offer",
+        "offers",
+        "work",
+        "opportunity",
+        "opportunities",
+    }
+    terms = [term for term in normalized.split() if term not in generic]
+    return bool(terms) or any(value is not None for value in (_first_location(text.lower()), _first_contract_type(text.lower()), _first_seniority(text.lower()), _first_remote_policy(text.lower())))
+
+
+def _normalized_text(text: str) -> str:
+    normalized = re.sub(r"[^\w\s-]", " ", text.lower())
+    return re.sub(r"\s+", " ", normalized).strip()
 
 
 def _search_query(text: str) -> str:

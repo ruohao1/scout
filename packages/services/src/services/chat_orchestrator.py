@@ -2,9 +2,10 @@ from __future__ import annotations
 
 import json
 from dataclasses import asdict
-from typing import Any, Protocol
+from typing import Any, Callable, Protocol
 
 from db.profiles import ProfileRepository
+from providers.errors import ProviderHTTPError
 from providers.openai_auth import OpenAIAuthProvider
 from providers.types import GenerateRequest, ProviderMessage
 from rag.types import JobSearchFilters
@@ -28,6 +29,7 @@ def respond_to_chat_with_tools(
     limit: int = 5,
     model: str = "gpt-5.5",
     provider: ChatPlanningProvider | None = None,
+    event_callback: Callable[[dict[str, Any]], None] | None = None,
 ) -> ChatResult:
     planner = provider or OpenAIAuthProvider()
     active_filters = filters or JobSearchFilters()
@@ -42,10 +44,20 @@ def respond_to_chat_with_tools(
         )
         tool_call = _first_tool_call(first_response.tool_calls)
         if tool_call is None:
+            _emit(event_callback, {"type": "step_completed", "id": "summarize", "summary": "Answered without using a tool"})
             return ChatResult(message=first_response.text or "What would you like to do next?", tool="none")
 
         tool_name, tool_args = _tool_name(tool_call), _tool_arguments(tool_call)
-        tool_result = _execute_tool(tool_name, tool_args, profile_id=profile_id, filters=active_filters, limit=limit)
+        _emit(event_callback, {"type": "tool_started", "id": tool_name or "tool", "tool": tool_name or "unknown", "args": _public_args(tool_args)})
+        try:
+            tool_result = _execute_tool(tool_name, tool_args, profile_id=profile_id, filters=active_filters, limit=limit)
+        except Exception as exc:
+            tool_result = {"ok": False, "tool": tool_name, "error": _tool_error_message(tool_name, exc), "jobs": [], "ranked_jobs": []}
+        if tool_result.get("ok"):
+            _emit(event_callback, {"type": "tool_completed", "id": tool_name or "tool", "summary": _tool_summary(tool_name, tool_result)})
+        else:
+            _emit(event_callback, {"type": "tool_failed", "id": tool_name or "tool", "summary": str(tool_result.get("error") or "Tool failed")})
+        _emit(event_callback, {"type": "step_started", "id": "summarize", "title": "Summarize response"})
         final_response = planner.generate(
             GenerateRequest(
                 model=model,
@@ -55,8 +67,22 @@ def respond_to_chat_with_tools(
                 tool_results=[_tool_result_message(tool_call, tool_result)],
             )
         )
+        _emit(event_callback, {"type": "step_completed", "id": "summarize", "summary": "Prepared final answer"})
         return _chat_result(tool_name=tool_name, tool_result=tool_result, message=final_response.text)
+    except ProviderHTTPError as exc:
+        _emit(event_callback, {"type": "step_completed", "id": "plan", "summary": "AI planner unavailable; using local fallback"})
+        fallback = respond_to_chat(message=message, profile_id=profile_id, filters=active_filters, limit=limit)
+        if fallback.tool != "none":
+            _emit(event_callback, {"type": "tool_completed", "id": fallback.tool, "summary": _fallback_summary(fallback)})
+        return ChatResult(
+            message=fallback.message,
+            tool=fallback.tool,
+            jobs=fallback.jobs,
+            ranked_jobs=fallback.ranked_jobs,
+            warnings=["AI workflow planner unavailable; used local keyword router.", *fallback.warnings, _provider_error_message(exc)],
+        )
     except Exception as exc:
+        _emit(event_callback, {"type": "step_completed", "id": "plan", "summary": "AI planner unavailable; using local fallback"})
         fallback = respond_to_chat(message=message, profile_id=profile_id, filters=active_filters, limit=limit)
         return ChatResult(
             message=fallback.message,
@@ -80,7 +106,7 @@ def _messages(
         "filters": asdict(filters),
         "limit": limit,
     }
-    messages: list[ProviderMessage] = [ProviderMessage(role="system", content=f"Current Scout context: {json.dumps(context)}")]
+    messages: list[ProviderMessage] = [ProviderMessage(role="developer", content=f"Current Scout context: {json.dumps(context)}")]
     for item in (history or [])[-8:]:
         role = item.get("role")
         content = item.get("content")
@@ -191,6 +217,56 @@ def _tool_result_message(tool_call: dict[str, Any], tool_result: dict[str, Any])
         "call_id": tool_call.get("call_id") or tool_call.get("id") or _tool_name(tool_call),
         "output": json.dumps(tool_result, default=str),
     }
+
+
+def _emit(callback: Callable[[dict[str, Any]], None] | None, event: dict[str, Any]) -> None:
+    if callback is not None:
+        callback(event)
+
+
+def _public_args(args: dict[str, Any]) -> dict[str, Any]:
+    public: dict[str, Any] = {}
+    for key in ("query", "profile_id", "limit", "filters"):
+        if key in args:
+            public[key] = args[key]
+    return public
+
+
+def _tool_summary(tool_name: str, tool_result: dict[str, Any]) -> str:
+    if tool_name == "search_jobs":
+        return f"Found {len(tool_result.get('jobs') or [])} jobs"
+    if tool_name == "rank_jobs_for_profile":
+        return f"Ranked {len(tool_result.get('ranked_jobs') or [])} jobs"
+    if tool_name == "list_profiles":
+        return f"Found {len(tool_result.get('profiles') or [])} profiles"
+    if tool_name == "get_profile":
+        return "Loaded selected profile" if tool_result.get("profile") else "Profile not found"
+    return "Tool completed"
+
+
+def _tool_error_message(tool_name: str, exc: Exception) -> str:
+    detail = str(exc)
+    if 'relation "job_chunks" does not exist' in detail or 'relation "jobs" does not exist' in detail:
+        return "Search database is not initialized. Run `docker compose exec api uv run python main.py db setup`, then import and index jobs."
+    if tool_name == "search_jobs":
+        return f"Search failed: {detail}"
+    if tool_name == "rank_jobs_for_profile":
+        return f"Ranking failed: {detail}"
+    return f"Tool failed: {detail}"
+
+
+def _provider_error_message(exc: ProviderHTTPError) -> str:
+    if exc.body:
+        return f"{exc} ({exc.body})"
+    return str(exc)
+
+
+def _fallback_summary(result: ChatResult) -> str:
+    if result.tool == "search_jobs":
+        return f"Found {len(result.jobs)} jobs"
+    if result.tool == "rank_jobs_for_profile":
+        return f"Ranked {len(result.ranked_jobs)} jobs"
+    return "Local router completed"
 
 
 def _filters(value: object, *, fallback: JobSearchFilters) -> JobSearchFilters:
