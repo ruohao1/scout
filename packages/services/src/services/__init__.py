@@ -3,6 +3,7 @@ from .chat_orchestrator import respond_to_chat_with_tools
 from .cv_parsing import EmptyCVError, InvalidCVFileError, UnsupportedCVFileError, extract_cv_text
 from .job_explanations import ExplanationParseError, explain_ranked_jobs
 from .job_corpus import JobCorpusStatus, get_job_corpus_status
+from .hybrid_rag import respond_with_hybrid_rag
 from .job_indexing import JobNotFoundError, index_job
 from .job_providers import AdzunaJobProviderAdapter, AdzunaJobProviderClient, JobImportResult, MockJobProviderAdapter, MockJobProviderClient, import_jobs
 from .job_ranking import ProfileNotFoundError, rank_jobs_for_profile
@@ -39,5 +40,6 @@ __all__ = [
     "respond_to_chat",
     "respond_to_chat_with_graph",
     "respond_to_chat_with_tools",
+    "respond_with_hybrid_rag",
     "search_jobs",
 ]

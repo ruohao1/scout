@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import asdict
+import os
 from pathlib import Path
 import re
 from typing import Any, Callable, Protocol, TypedDict
@@ -10,7 +11,8 @@ from langgraph.graph import END, START, StateGraph
 from rag.types import JobSearchFilters
 
 from .chat import ChatResult
-from .chat_orchestrator import ChatPlanningProvider, respond_to_chat_with_tools
+from .chat_orchestrator import ChatPlanningProvider
+from .hybrid_rag import respond_with_hybrid_rag
 from .job_corpus import get_job_corpus_status
 from .job_providers import AdzunaJobProviderAdapter, AdzunaJobProviderClient, MockJobProviderAdapter, MockJobProviderClient, import_jobs
 
@@ -38,7 +40,7 @@ def respond_to_chat_with_graph(
     profile_id: str | None = None,
     filters: JobSearchFilters | None = None,
     limit: int = 5,
-    model: str = "gpt-5.5",
+    model: str | None = None,
     provider: ChatPlanningProvider | None = None,
     graph: CompiledWorkflow | None = None,
     event_callback: Callable[[dict[str, Any]], None] | None = None,
@@ -51,7 +53,7 @@ def respond_to_chat_with_graph(
             "profile_id": profile_id,
             "filters": asdict(filters or JobSearchFilters()),
             "limit": limit,
-            "model": model,
+            "model": model or os.environ.get("GEMINI_CHAT_MODEL", "gemini-2.5-flash"),
         }
     )
     result = state.get("result") or {}
@@ -233,18 +235,17 @@ def build_job_workflow_graph(*, provider: ChatPlanningProvider | None = None, ev
         return {"result": {"message": message, "tool": "import_adzuna_jobs", "jobs": [], "ranked_jobs": [], "warnings": []}}
 
     def plan_and_run(state: JobWorkflowState) -> dict[str, Any]:
-        _emit(event_callback, {"type": "step_started", "id": "plan", "title": "Plan next action"})
-        result = respond_to_chat_with_tools(
+        _emit(event_callback, {"type": "step_started", "id": "hybrid_rag", "title": "Run Hybrid RAG"})
+        result = respond_with_hybrid_rag(
             message=state.get("message", ""),
             history=state.get("history") or [],
             profile_id=state.get("profile_id"),
             filters=JobSearchFilters(**(state.get("filters") or {})),
             limit=int(state.get("limit") or 5),
-            model=state.get("model") or "gpt-5.5",
-            provider=provider,
+            model=state.get("model") or "gemini-2.5-flash",
             event_callback=event_callback,
         )
-        _emit(event_callback, {"type": "step_completed", "id": "plan", "summary": f"Used {result.tool}" if result.tool != "none" else "Answered without a tool"})
+        _emit(event_callback, {"type": "step_completed", "id": "hybrid_rag", "summary": f"Used {result.tool}" if result.tool != "none" else "Answered without retrieval"})
         return {"result": asdict(result)}
 
     builder.add_node("check_corpus", check_corpus)
