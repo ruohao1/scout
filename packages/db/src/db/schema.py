@@ -116,6 +116,103 @@ def setup_database(*, url: str | None = None) -> None:
         )
         conn.execute(
             """
+            CREATE TABLE IF NOT EXISTS candidate (
+                id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+                display_name text,
+                headline text,
+                summary text,
+                created_at timestamptz NOT NULL DEFAULT now(),
+                updated_at timestamptz NOT NULL DEFAULT now()
+            )
+            """
+        )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS candidate_documents (
+                id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+                filename text,
+                content_type text,
+                file_data bytea,
+                text text NOT NULL,
+                source text NOT NULL DEFAULT 'upload',
+                created_at timestamptz NOT NULL DEFAULT now(),
+                updated_at timestamptz NOT NULL DEFAULT now()
+            )
+            """
+        )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS candidate_evidence (
+                id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+                type text NOT NULL,
+                title text NOT NULL,
+                organization text,
+                location text,
+                start_date text,
+                end_date text,
+                is_current boolean NOT NULL DEFAULT false,
+                description text,
+                skills text[] NOT NULL DEFAULT '{}',
+                url text,
+                metadata jsonb NOT NULL DEFAULT '{}'::jsonb,
+                source_document_id uuid REFERENCES candidate_documents(id) ON DELETE SET NULL,
+                confidence double precision NOT NULL DEFAULT 1.0,
+                created_at timestamptz NOT NULL DEFAULT now(),
+                updated_at timestamptz NOT NULL DEFAULT now(),
+                CHECK (type IN ('experience', 'project', 'skill', 'education', 'certification', 'language', 'interest', 'document_note')),
+                CHECK (confidence >= 0.0 AND confidence <= 1.0)
+            )
+            """
+        )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS candidate_evidence_chunks (
+                id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+                evidence_id uuid NOT NULL REFERENCES candidate_evidence(id) ON DELETE CASCADE,
+                chunk_index integer NOT NULL,
+                content text NOT NULL,
+                embedding vector(1536),
+                metadata jsonb NOT NULL DEFAULT '{}'::jsonb,
+                created_at timestamptz NOT NULL DEFAULT now(),
+                UNIQUE (evidence_id, chunk_index)
+            )
+            """
+        )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS target_profiles (
+                id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+                name text NOT NULL,
+                summary text,
+                target_roles text[] NOT NULL DEFAULT '{}',
+                target_locations text[] NOT NULL DEFAULT '{}',
+                preferred_contract_types text[] NOT NULL DEFAULT '{}',
+                seniority text,
+                remote_preference text,
+                must_have_keywords text[] NOT NULL DEFAULT '{}',
+                nice_to_have_keywords text[] NOT NULL DEFAULT '{}',
+                avoid_keywords text[] NOT NULL DEFAULT '{}',
+                instructions text,
+                created_at timestamptz NOT NULL DEFAULT now(),
+                updated_at timestamptz NOT NULL DEFAULT now()
+            )
+            """
+        )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS target_profile_evidence (
+                target_profile_id uuid NOT NULL REFERENCES target_profiles(id) ON DELETE CASCADE,
+                evidence_id uuid NOT NULL REFERENCES candidate_evidence(id) ON DELETE CASCADE,
+                weight double precision NOT NULL DEFAULT 1.0,
+                note text,
+                created_at timestamptz NOT NULL DEFAULT now(),
+                PRIMARY KEY (target_profile_id, evidence_id),
+                CHECK (weight >= 0.0 AND weight <= 1.0)
+            )
+            """
+        )
+        conn.execute(
+            """
             CREATE TABLE IF NOT EXISTS provider_import_runs (
                 id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
                 provider text NOT NULL,
@@ -145,6 +242,12 @@ def setup_database(*, url: str | None = None) -> None:
         conn.execute("CREATE INDEX IF NOT EXISTS profile_projects_created_at_idx ON profile_projects (created_at DESC)")
         conn.execute("CREATE INDEX IF NOT EXISTS profile_skills_profile_id_idx ON profile_skills (profile_id)")
         conn.execute("CREATE INDEX IF NOT EXISTS profile_skills_created_at_idx ON profile_skills (created_at DESC)")
+        conn.execute("CREATE INDEX IF NOT EXISTS candidate_evidence_type_idx ON candidate_evidence (type)")
+        conn.execute("CREATE INDEX IF NOT EXISTS candidate_evidence_source_document_idx ON candidate_evidence (source_document_id)")
+        conn.execute("CREATE INDEX IF NOT EXISTS candidate_evidence_skills_gin_idx ON candidate_evidence USING gin (skills)")
+        conn.execute("CREATE INDEX IF NOT EXISTS candidate_evidence_chunks_evidence_id_idx ON candidate_evidence_chunks (evidence_id)")
+        conn.execute("CREATE INDEX IF NOT EXISTS target_profiles_created_at_idx ON target_profiles (created_at DESC)")
+        conn.execute("CREATE INDEX IF NOT EXISTS target_profile_evidence_evidence_id_idx ON target_profile_evidence (evidence_id)")
         conn.execute("CREATE INDEX IF NOT EXISTS provider_import_runs_provider_idx ON provider_import_runs (provider)")
         conn.execute("CREATE INDEX IF NOT EXISTS provider_import_runs_created_at_idx ON provider_import_runs (created_at DESC)")
         conn.execute("CREATE INDEX IF NOT EXISTS user_profiles_skills_gin_idx ON user_profiles USING gin (skills)")
