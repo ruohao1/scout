@@ -159,8 +159,7 @@ def build_job_workflow_graph(*, provider: ChatPlanningProvider | None = None):
         if route.query:
             summary += f" ({route.query})"
         _emit({"type": "step_completed", "id": "route_request", "summary": summary})
-        warnings = [route.warning] if route.warning else []
-        return {"route": asdict(route), "limit": route.limit or state.get("limit") or 5, "result": {"warnings": warnings} if warnings else {}}
+        return {"route": asdict(route), "limit": route.limit or state.get("limit") or 5}
 
     def route_initial(state: JobWorkflowState) -> str:
         message = state.get("message", "")
@@ -379,11 +378,7 @@ def build_job_workflow_graph(*, provider: ChatPlanningProvider | None = None):
             route_intent=route.get("intent") if isinstance(route.get("intent"), str) else None,
             route_wants_live=route.get("wants_live") if isinstance(route.get("wants_live"), bool) else None,
         )
-        result_dict = asdict(result)
-        route_warnings = _string_list((state.get("result") or {}).get("warnings"))
-        if route_warnings:
-            result_dict["warnings"] = [*route_warnings, *result_dict.get("warnings", [])]
-        return {"result": result_dict}
+        return {"result": asdict(result)}
 
     builder.add_node("route_request", route_request)
     builder.add_node("check_corpus", check_corpus)

@@ -69,7 +69,7 @@ def respond_to_job_search_agent(
     if _target_profile_missing(local):
         _emit({"type": "step_completed", "id": "job_search_agent", "summary": "Target profile not found"})
         return ChatResult(message=target_profile_not_found_message(), tool="job_search_agent", warnings=local.get("warnings", []))
-    should_fetch_live = wants_live or (intent in {"search", "rank"} and not _has_enough_results(local_count, active_limit))
+    should_fetch_live = wants_live or (intent == "rank" and not _has_enough_results(local_count, active_limit))
 
     if not should_fetch_live:
         _emit({"type": "step_completed", "id": "job_search_agent", "summary": f"Found {local_count} local results"})
@@ -389,23 +389,26 @@ def _job_score(job: dict[str, Any]) -> float:
 
 
 def _job_matches_terms(job: dict[str, Any], terms: set[str]) -> bool:
-    haystack = _normalized_text(
+    title = _normalized_text(str(job.get("title") or ""))
+    content = _normalized_text(str(job.get("content") or ""))
+    skills = _normalized_text(
         " ".join(
-            part
-            for part in [
-                str(job.get("title") or ""),
-                str(job.get("content") or ""),
-                " ".join(skill for skill in job.get("skills") or [] if isinstance(skill, str)),
-                " ".join(skill for skill in job.get("matched_skills") or [] if isinstance(skill, str)),
-            ]
-            if part
+            skill
+            for skill in [*(job.get("skills") or []), *(job.get("matched_skills") or [])]
+            if isinstance(skill, str)
         )
     )
+    haystack = _normalized_text(" ".join(part for part in [title, content, skills] if part))
     if not haystack:
         return False
     specific_terms = terms - _GENERIC_RELEVANCE_TERMS
     if specific_terms:
-        return all(term in haystack for term in specific_terms)
+        role_terms = terms & _GENERIC_RELEVANCE_TERMS
+        role_text = f"{title} {content}"
+        has_specific_terms = all(term in haystack for term in specific_terms)
+        has_role_context = not role_terms or any(term in role_text for term in _GENERIC_RELEVANCE_TERMS)
+        is_unwanted_support = _has_unwanted_support_context(title=title, content=content, terms=terms)
+        return has_specific_terms and has_role_context and not is_unwanted_support
     return any(term in haystack for term in terms)
 
 
@@ -582,7 +585,15 @@ def _normalized_text(text: str) -> str:
     return re.sub(r"\s+", " ", normalized).strip()
 
 
+def _has_unwanted_support_context(*, title: str, content: str, terms: set[str]) -> bool:
+    if terms & {"support", "customer", "training", "trainer"}:
+        return False
+    role_text = f"{title} {content}"
+    return any(term in role_text for term in _SUPPORT_CONTEXT_TERMS)
+
+
 _GENERIC_RELEVANCE_TERMS = {"developer", "engineer", "engineering", "software", "role", "roles"}
+_SUPPORT_CONTEXT_TERMS = {"support engineer", "customer support", "technical support", "training", "trainer", "learning and development", "l&d"}
 
 
 def _emit(event: dict[str, Any]) -> None:

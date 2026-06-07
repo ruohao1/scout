@@ -62,8 +62,6 @@ def route_chat_request(
                     limit=limit,
                 ),
                 instructions=_INSTRUCTIONS,
-                temperature=0,
-                max_tokens=500,
             )
         )
         return _route_from_ai_response(response.text, fallback_limit=limit)
