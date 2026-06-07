@@ -51,12 +51,64 @@ def setup_database(*, url: str | None = None) -> None:
                 id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
                 name text,
                 cv_text text NOT NULL,
+                cv_filename text,
+                cv_content_type text,
+                cv_file bytea,
                 target_roles text[] NOT NULL DEFAULT '{}',
                 target_locations text[] NOT NULL DEFAULT '{}',
                 skills text[] NOT NULL DEFAULT '{}',
                 seniority text,
                 preferred_contract_types text[] NOT NULL DEFAULT '{}',
                 remote_preference text,
+                created_at timestamptz NOT NULL DEFAULT now(),
+                updated_at timestamptz NOT NULL DEFAULT now()
+            )
+            """
+        )
+        conn.execute("ALTER TABLE user_profiles ADD COLUMN IF NOT EXISTS cv_filename text")
+        conn.execute("ALTER TABLE user_profiles ADD COLUMN IF NOT EXISTS cv_content_type text")
+        conn.execute("ALTER TABLE user_profiles ADD COLUMN IF NOT EXISTS cv_file bytea")
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS profile_experiences (
+                id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+                profile_id uuid NOT NULL REFERENCES user_profiles(id) ON DELETE CASCADE,
+                title text NOT NULL,
+                company text,
+                location text,
+                start_date text,
+                end_date text,
+                is_current boolean NOT NULL DEFAULT false,
+                description text,
+                skills text[] NOT NULL DEFAULT '{}',
+                created_at timestamptz NOT NULL DEFAULT now(),
+                updated_at timestamptz NOT NULL DEFAULT now()
+            )
+            """
+        )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS profile_projects (
+                id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+                profile_id uuid NOT NULL REFERENCES user_profiles(id) ON DELETE CASCADE,
+                name text NOT NULL,
+                role text,
+                url text,
+                description text,
+                skills text[] NOT NULL DEFAULT '{}',
+                created_at timestamptz NOT NULL DEFAULT now(),
+                updated_at timestamptz NOT NULL DEFAULT now()
+            )
+            """
+        )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS profile_skills (
+                id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+                profile_id uuid NOT NULL REFERENCES user_profiles(id) ON DELETE CASCADE,
+                name text NOT NULL,
+                category text,
+                proficiency text,
                 created_at timestamptz NOT NULL DEFAULT now(),
                 updated_at timestamptz NOT NULL DEFAULT now()
             )
@@ -87,6 +139,12 @@ def setup_database(*, url: str | None = None) -> None:
         conn.execute("CREATE INDEX IF NOT EXISTS jobs_created_at_idx ON jobs (created_at DESC)")
         conn.execute("CREATE INDEX IF NOT EXISTS job_chunks_job_id_idx ON job_chunks (job_id)")
         conn.execute("CREATE INDEX IF NOT EXISTS job_chunks_section_idx ON job_chunks (section)")
+        conn.execute("CREATE INDEX IF NOT EXISTS profile_experiences_profile_id_idx ON profile_experiences (profile_id)")
+        conn.execute("CREATE INDEX IF NOT EXISTS profile_experiences_created_at_idx ON profile_experiences (created_at DESC)")
+        conn.execute("CREATE INDEX IF NOT EXISTS profile_projects_profile_id_idx ON profile_projects (profile_id)")
+        conn.execute("CREATE INDEX IF NOT EXISTS profile_projects_created_at_idx ON profile_projects (created_at DESC)")
+        conn.execute("CREATE INDEX IF NOT EXISTS profile_skills_profile_id_idx ON profile_skills (profile_id)")
+        conn.execute("CREATE INDEX IF NOT EXISTS profile_skills_created_at_idx ON profile_skills (created_at DESC)")
         conn.execute("CREATE INDEX IF NOT EXISTS provider_import_runs_provider_idx ON provider_import_runs (provider)")
         conn.execute("CREATE INDEX IF NOT EXISTS provider_import_runs_created_at_idx ON provider_import_runs (created_at DESC)")
         conn.execute("CREATE INDEX IF NOT EXISTS user_profiles_skills_gin_idx ON user_profiles USING gin (skills)")

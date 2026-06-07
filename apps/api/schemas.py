@@ -4,7 +4,7 @@ from datetime import datetime
 from typing import Any, Literal
 from uuid import UUID
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 class JobCreate(BaseModel):
@@ -80,7 +80,7 @@ class ProviderImportRunRead(BaseModel):
 
 class ProfileCreate(BaseModel):
     name: str | None = None
-    cv_text: str
+    cv_text: str = Field(min_length=1)
     target_roles: list[str] = Field(default_factory=list)
     target_locations: list[str] = Field(default_factory=list)
     skills: list[str] = Field(default_factory=list)
@@ -88,11 +88,40 @@ class ProfileCreate(BaseModel):
     preferred_contract_types: list[str] = Field(default_factory=list)
     remote_preference: str | None = None
 
+    @field_validator("cv_text")
+    @classmethod
+    def cv_text_must_not_be_blank(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("CV text must not be blank")
+        return value
+
 
 class ProfileRead(BaseModel):
     id: UUID
     name: str | None = None
     cv_text: str
+    cv_filename: str | None = None
+    cv_content_type: str | None = None
+    has_cv_file: bool = False
+    target_roles: list[str]
+    target_locations: list[str]
+    skills: list[str]
+    seniority: str | None = None
+    preferred_contract_types: list[str]
+    remote_preference: str | None = None
+    extraction_warning: str | None = None
+    created_at: datetime
+    updated_at: datetime
+
+
+class ProfileListRead(BaseModel):
+    id: UUID
+    name: str | None = None
+    cv_preview: str
+    cv_filename: str | None = None
+    cv_content_type: str | None = None
+    has_cv_file: bool = False
     target_roles: list[str]
     target_locations: list[str]
     skills: list[str]
@@ -101,6 +130,82 @@ class ProfileRead(BaseModel):
     remote_preference: str | None = None
     created_at: datetime
     updated_at: datetime
+
+
+class ProfileExperienceCreate(BaseModel):
+    title: str = Field(min_length=1)
+    company: str | None = None
+    location: str | None = None
+    start_date: str | None = None
+    end_date: str | None = None
+    is_current: bool = False
+    description: str | None = None
+    skills: list[str] = Field(default_factory=list)
+
+    @field_validator("title")
+    @classmethod
+    def title_must_not_be_blank(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("Experience title must not be blank")
+        return value
+
+
+class ProfileExperienceRead(ProfileExperienceCreate):
+    id: UUID
+    profile_id: UUID
+    created_at: datetime
+    updated_at: datetime
+
+
+class ProfileProjectCreate(BaseModel):
+    name: str = Field(min_length=1)
+    role: str | None = None
+    url: str | None = None
+    description: str | None = None
+    skills: list[str] = Field(default_factory=list)
+
+    @field_validator("name")
+    @classmethod
+    def name_must_not_be_blank(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("Project name must not be blank")
+        return value
+
+
+class ProfileProjectRead(ProfileProjectCreate):
+    id: UUID
+    profile_id: UUID
+    created_at: datetime
+    updated_at: datetime
+
+
+class ProfileSkillCreate(BaseModel):
+    name: str = Field(min_length=1)
+    category: str | None = None
+    proficiency: str | None = None
+
+    @field_validator("name")
+    @classmethod
+    def skill_name_must_not_be_blank(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("Skill name must not be blank")
+        return value
+
+
+class ProfileSkillRead(ProfileSkillCreate):
+    id: UUID
+    profile_id: UUID
+    created_at: datetime
+    updated_at: datetime
+
+
+class ProfileEnrichmentRead(BaseModel):
+    experiences: list[ProfileExperienceRead]
+    projects: list[ProfileProjectRead]
+    enriched_skills: list[ProfileSkillRead]
 
 
 class SearchFilters(BaseModel):

@@ -7,6 +7,8 @@ from providers.openai_auth import OpenAIAuthProvider
 from providers.types import GenerateRequest, ProviderMessage
 
 MIN_CONFIDENCE = 0.45
+MAX_PROFILE_EXTRACTION_CHARS = 60_000
+PROFILE_EXTRACTION_TIMEOUT_SECONDS = 30.0
 
 
 class ProfileExtractionError(ValueError):
@@ -24,7 +26,7 @@ def extract_profile_fields(
     provider: ProfileExtractionProvider | None = None,
     model: str = "gpt-5.5",
 ) -> dict[str, Any]:
-    extraction_provider = provider or OpenAIAuthProvider()
+    extraction_provider = provider or OpenAIAuthProvider(timeout=PROFILE_EXTRACTION_TIMEOUT_SECONDS)
     try:
         response = extraction_provider.generate(
             GenerateRequest(
@@ -39,14 +41,16 @@ def extract_profile_fields(
 
 
 def _profile_extraction_prompt(cv_text: str) -> str:
+    cv_text = cv_text[:MAX_PROFILE_EXTRACTION_CHARS]
     return (
         "Extract a structured candidate profile from this CV text. Use only evidence present in the CV. "
         "Return strict JSON only with these keys: summary, target_roles, target_locations, skills, "
-        "experience, education, certifications, languages, seniority, preferred_contract_types, "
+        "experience, projects, education, certifications, languages, seniority, preferred_contract_types, "
         "remote_preference, warnings.\n"
         "target_roles and target_locations must be arrays of objects with value, confidence, and evidence.\n"
         "skills must be an array of objects with name, category, confidence, and evidence.\n"
-        "experience must be an array of objects with title, company, technologies, and evidence.\n"
+        "experience must be an array of objects with title, company, location, start_date, end_date, is_current, description, technologies, confidence, and evidence.\n"
+        "projects must be an array of objects with name, role, url, description, technologies, confidence, and evidence.\n"
         "education must be an array of objects with institution, degree, and evidence.\n"
         "certifications must be an array of objects with name and evidence.\n"
         "languages must be an array of objects with name, level, and evidence.\n"
@@ -76,6 +80,9 @@ def _parse_profile_fields(text: str) -> dict[str, Any]:
         "seniority": _seniority(_profile_value(data.get("seniority"))),
         "preferred_contract_types": _contract_types(_profile_items(data.get("preferred_contract_types"), value_key="value", limit=5)),
         "remote_preference": _remote_preference(_profile_value(data.get("remote_preference"))),
+        "experiences": _experiences(data.get("experience"), limit=12),
+        "projects": _projects(data.get("projects"), limit=12),
+        "enriched_skills": _skills(data.get("skills"), limit=40),
     }
 
 
@@ -116,6 +123,99 @@ def _profile_value(value: object) -> str | None:
         return None
     item = value.get("value")
     return item.strip() if isinstance(item, str) else None
+
+
+def _experiences(value: object, *, limit: int) -> list[dict[str, Any]]:
+    if not isinstance(value, list):
+        return []
+    result: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for item in value:
+        if not isinstance(item, dict) or _confidence(item.get("confidence")) < MIN_CONFIDENCE:
+            continue
+        title = _text(item.get("title"))
+        if title is None:
+            continue
+        company = _text(item.get("company"))
+        key = f"{title.lower()}::{(company or '').lower()}"
+        if key in seen:
+            continue
+        result.append(
+            {
+                "title": title,
+                "company": company,
+                "location": _text(item.get("location")),
+                "start_date": _text(item.get("start_date")),
+                "end_date": _text(item.get("end_date")),
+                "is_current": bool(item.get("is_current")),
+                "description": _text(item.get("description")) or _text(item.get("evidence")),
+                "skills": _string_list(item.get("technologies"), limit=12),
+            }
+        )
+        seen.add(key)
+        if len(result) >= limit:
+            break
+    return result
+
+
+def _projects(value: object, *, limit: int) -> list[dict[str, Any]]:
+    if not isinstance(value, list):
+        return []
+    result: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for item in value:
+        if not isinstance(item, dict) or _confidence(item.get("confidence")) < MIN_CONFIDENCE:
+            continue
+        name = _text(item.get("name"))
+        if name is None:
+            continue
+        key = name.lower()
+        if key in seen:
+            continue
+        result.append(
+            {
+                "name": name,
+                "role": _text(item.get("role")),
+                "url": _text(item.get("url")),
+                "description": _text(item.get("description")) or _text(item.get("evidence")),
+                "skills": _string_list(item.get("technologies"), limit=12),
+            }
+        )
+        seen.add(key)
+        if len(result) >= limit:
+            break
+    return result
+
+
+def _skills(value: object, *, limit: int) -> list[dict[str, Any]]:
+    if not isinstance(value, list):
+        return []
+    result: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for item in value:
+        if not isinstance(item, dict) or _confidence(item.get("confidence")) < MIN_CONFIDENCE:
+            continue
+        name = _text(item.get("name"))
+        if name is None:
+            continue
+        key = name.lower()
+        if key in seen:
+            continue
+        result.append(
+            {
+                "name": name,
+                "category": _text(item.get("category")),
+                "proficiency": _text(item.get("proficiency")),
+            }
+        )
+        seen.add(key)
+        if len(result) >= limit:
+            break
+    return result
+
+
+def _text(value: object) -> str | None:
+    return value.strip() if isinstance(value, str) and value.strip() else None
 
 
 def _confidence(value: object) -> float:
