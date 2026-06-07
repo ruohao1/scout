@@ -31,6 +31,7 @@ import { ChatView } from './features/chat/ChatView.jsx'
 import { JobsView } from './features/jobs/JobsView.jsx'
 import { MatchesView } from './features/matches/MatchesView.jsx'
 import { ProfilesView } from './features/profiles/ProfilesView.jsx'
+import { TargetProfilesView } from './features/target-profiles/TargetProfilesView.jsx'
 import { PlaceholderView } from './features/workspace/PlaceholderView.jsx'
 import { ACTIVE_TARGET_PROFILE_ID_KEY, readStoredBoolean, readStoredJson, readStoredString, writeStoredJson, writeStoredString } from './lib/storage.js'
 
@@ -601,10 +602,20 @@ function App() {
             )}
             {activeView === 'jobs' && <JobsView jobs={jobs} isLoading={isLoadingJobs} error={jobsError} onRefresh={loadJobs} />}
             {activeView === 'candidate' && <CandidateView />}
+            {activeView === 'targetProfiles' && (
+              <TargetProfilesView
+                targetProfiles={profiles}
+                selectedTargetProfileId={selectedProfileId}
+                isLoading={isLoadingProfiles}
+                error={profilesError}
+                onSelectTargetProfile={setSelectedProfileId}
+                onRefreshTargetProfiles={loadProfiles}
+              />
+            )}
             {activeView === 'matches' && (
               <MatchesView selectedProfile={selectedProfile} matches={rankedMatches} isLoading={isLoadingMatches} error={matchesError} onRefresh={() => selectedProfileExists && loadMatches(selectedProfileId)} onOpenProfiles={() => changeView('targetProfiles')} />
             )}
-            {activeView !== 'chat' && activeView !== 'jobs' && activeView !== 'candidate' && activeView !== 'matches' && <PlaceholderView view={placeholderViews[activeView]} />}
+            {activeView !== 'chat' && activeView !== 'jobs' && activeView !== 'candidate' && activeView !== 'targetProfiles' && activeView !== 'matches' && <PlaceholderView view={placeholderViews[activeView]} />}
           </main>
         </SidebarInset>
       </SidebarProvider>
