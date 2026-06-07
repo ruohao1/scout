@@ -1,16 +1,22 @@
 import { JobCard } from '../jobs/JobCard.jsx'
 import { ActivityTimeline } from './ActivityTimeline.jsx'
+import { MarkdownMessage } from './MarkdownMessage.jsx'
 
 export function ChatMessage({ message }) {
   const results = message.rankedJobs?.length ? message.rankedJobs : message.jobs || []
+  const activities = message.activities || []
+  const hasToolActivity = activities.some((activity) => activity.kind === 'tool')
+  const hasActiveOrFailedActivity = activities.some((activity) => activity.status === 'running' || activity.status === 'failed')
+  const shouldShowActivity = hasToolActivity || hasActiveOrFailedActivity
+
   return (
     <article className={`message ${message.role}`}>
       <div className="message-meta">
         <span>{message.role === 'user' ? 'You' : 'Scout'}</span>
         {message.tool && <code>{message.tool}</code>}
       </div>
-      {message.activities?.length > 0 && <ActivityTimeline activities={message.activities} status={message.status} collapsed={message.activityCollapsed} />}
-      {message.content && <p>{message.content}</p>}
+      {shouldShowActivity && <ActivityTimeline activities={activities} status={message.status} collapsed={message.activityCollapsed} />}
+      {message.content && (message.role === 'assistant' ? <MarkdownMessage content={message.content} /> : <p>{message.content}</p>)}
       {message.warnings?.map((warning) => (
         <div className="warning" key={warning}>
           {warning}

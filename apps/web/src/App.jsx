@@ -3,7 +3,26 @@ import { AppSidebar } from '@/components/app-sidebar'
 import { SidebarInset, SidebarProvider } from '@/components/ui/sidebar'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { PanelLeftCloseIcon, PanelLeftOpenIcon } from 'lucide-react'
-import { createProfile, listJobs, listProfiles, rankJobsForProfile, sendChatMessageStream, uploadProfile } from './api.js'
+import { useLocation, useNavigate } from 'react-router-dom'
+import {
+  attachProfileCv,
+  createProfile,
+  createProfileExperience,
+  createProfileProject,
+  createProfileSkill,
+  deleteProfileExperience,
+  deleteProfileProject,
+  deleteProfileSkill,
+  getProfileEnrichment,
+  listJobs,
+  listProfiles,
+  rankJobsForProfile,
+  sendChatMessageStream,
+  uploadProfile,
+  updateProfileExperience,
+  updateProfileProject,
+  updateProfileSkill,
+} from './api.js'
 import { applyChatStreamEvent, failRunningActivities } from './features/chat/chatStreamReducer.js'
 import { ChatView } from './features/chat/ChatView.jsx'
 import { JobsView } from './features/jobs/JobsView.jsx'
@@ -43,6 +62,16 @@ const STORAGE_KEYS = {
   contextPanelOpen: 'scout.contextPanelOpen',
 }
 
+const routeByView = {
+  chat: '/chat',
+  jobs: '/jobs',
+  matches: '/matches',
+  profiles: '/profiles',
+  settings: '/settings',
+}
+
+const viewByRoute = Object.fromEntries(Object.entries(routeByView).map(([view, route]) => [route, view]))
+
 const placeholderViews = {
   jobs: {
     eyebrow: 'Jobs',
@@ -65,13 +94,15 @@ const placeholderViews = {
   profiles: {
     eyebrow: 'Profiles',
     title: 'Candidate profiles will anchor matching.',
-    body: 'The profile area will manage candidate context and CV evidence before Scout uses it to explain job fit.',
-    actions: ['Candidate profile', 'CV context'],
+    body: 'The profile area will manage candidate context before Scout uses it to explain job fit.',
+    actions: ['Candidate profile', 'Structured context'],
   },
 }
 
 function App() {
-  const [activeView, setActiveView] = useState('chat')
+  const location = useLocation()
+  const navigate = useNavigate()
+  const activeView = viewByRoute[location.pathname] || 'chat'
   const [threads, setThreads] = useState(() => {
     const stored = readStoredJson(STORAGE_KEYS.threads, initialThreads)
     return validStoredThreads(stored) ? stored : initialThreads
@@ -90,7 +121,11 @@ function App() {
   const [profilesError, setProfilesError] = useState('')
   const [hasLoadedProfiles, setHasLoadedProfiles] = useState(false)
   const [isCreatingProfile, setIsCreatingProfile] = useState(false)
-  const [isUploadingProfile, setIsUploadingProfile] = useState(false)
+  const [isAttachingProfileCv, setIsAttachingProfileCv] = useState(false)
+  const [profileEnrichment, setProfileEnrichment] = useState({ experiences: [], projects: [], enriched_skills: [] })
+  const [enrichmentProfileId, setEnrichmentProfileId] = useState(null)
+  const [isLoadingEnrichment, setIsLoadingEnrichment] = useState(false)
+  const [isSavingEnrichment, setIsSavingEnrichment] = useState(false)
   const [rankedMatches, setRankedMatches] = useState([])
   const [isLoadingMatches, setIsLoadingMatches] = useState(false)
   const [matchesError, setMatchesError] = useState('')
@@ -99,6 +134,7 @@ function App() {
   const activeThread = threads.find((thread) => thread.id === activeThreadId) || threads[0]
   const messages = activeThread?.messages || []
   const selectedProfile = profiles.find((profile) => profile.id === selectedProfileId) || null
+  const selectedProfileExists = Boolean(selectedProfileId && profiles.some((profile) => profile.id === selectedProfileId))
 
   useEffect(() => {
     writeStoredJson(STORAGE_KEYS.threads, threads)
@@ -123,22 +159,43 @@ function App() {
   }, [threads, activeThreadId])
 
   useEffect(() => {
+    if (location.pathname === '/') {
+      navigate('/chat', { replace: true })
+      return
+    }
+    if (!viewByRoute[location.pathname]) {
+      navigate('/chat', { replace: true })
+    }
+  }, [location.pathname, navigate])
+
+  useEffect(() => {
     if (activeView === 'jobs' && !hasLoadedJobs && !isLoadingJobs) {
       loadJobs()
     }
   }, [activeView, hasLoadedJobs, isLoadingJobs])
 
   useEffect(() => {
-    if (activeView === 'profiles' && !hasLoadedProfiles && !isLoadingProfiles) {
+    if ((activeView === 'profiles' || activeView === 'matches') && !hasLoadedProfiles && !isLoadingProfiles) {
       loadProfiles()
     }
   }, [activeView, hasLoadedProfiles, isLoadingProfiles])
 
   useEffect(() => {
-    if (activeView === 'matches' && selectedProfileId && matchesProfileId !== selectedProfileId && !isLoadingMatches) {
+    if (activeView === 'profiles' && hasLoadedProfiles && selectedProfileExists && enrichmentProfileId !== selectedProfileId && !isLoadingEnrichment) {
+      loadProfileEnrichment(selectedProfileId)
+    }
+  }, [activeView, hasLoadedProfiles, selectedProfileExists, selectedProfileId, enrichmentProfileId, isLoadingEnrichment])
+
+  useEffect(() => {
+    if (activeView === 'matches' && hasLoadedProfiles && !selectedProfileExists) {
+      setRankedMatches([])
+      setMatchesProfileId(null)
+      return
+    }
+    if (activeView === 'matches' && hasLoadedProfiles && selectedProfileExists && matchesProfileId !== selectedProfileId && !isLoadingMatches) {
       loadMatches(selectedProfileId)
     }
-  }, [activeView, selectedProfileId, matchesProfileId, isLoadingMatches])
+  }, [activeView, hasLoadedProfiles, selectedProfileExists, selectedProfileId, matchesProfileId, isLoadingMatches])
 
   async function submitMessage(messageText = draft) {
     const content = messageText.trim()
@@ -223,33 +280,88 @@ function App() {
     setThreads((current) => current.map((thread) => (thread.id === threadId ? updater(thread) : thread)))
   }
 
+  function freshThread() {
+    return {
+      id: crypto.randomUUID(),
+      title: 'New conversation',
+      detail: 'Start a focused Scout thread.',
+      time: 'new',
+      messages: cloneMessages(initialMessages),
+    }
+  }
+
   function createThread() {
-    const id = crypto.randomUUID()
+    const thread = freshThread()
     setThreads((current) => [
-      {
-        id,
-        title: 'New conversation',
-        detail: 'Start a focused Scout thread.',
-        time: 'new',
-        messages: initialMessages,
-      },
+      thread,
       ...current,
     ])
-    setActiveThreadId(id)
-    setActiveView('chat')
+    setActiveThreadId(thread.id)
+    navigate('/chat')
     setIsContextPanelOpen(true)
     setDraft('')
   }
 
+  function renameThread(threadId, title) {
+    const nextTitle = title.trim()
+    if (!nextTitle) return
+
+    updateThread(threadId, (thread) => ({
+      ...thread,
+      title: nextTitle,
+    }))
+  }
+
+  function duplicateThread(threadId) {
+    const source = threads.find((thread) => thread.id === threadId)
+    if (!source) return
+
+    const duplicate = {
+      ...source,
+      id: crypto.randomUUID(),
+      title: `${source.title} copy`,
+      time: 'new',
+      messages: cloneMessages(source.messages),
+    }
+
+    const sourceIndex = threads.findIndex((thread) => thread.id === threadId)
+    setThreads([...threads.slice(0, sourceIndex + 1), duplicate, ...threads.slice(sourceIndex + 1)])
+    setActiveThreadId(duplicate.id)
+    navigate('/chat')
+    setIsContextPanelOpen(true)
+    setDraft('')
+  }
+
+  function deleteThread(threadId) {
+    if (!threads.some((thread) => thread.id === threadId)) return
+
+    if (threads.length === 1) {
+      const replacement = freshThread()
+      setThreads([replacement])
+      setActiveThreadId(replacement.id)
+      navigate('/chat')
+      setIsContextPanelOpen(true)
+      setDraft('')
+      return
+    }
+
+    const nextThreads = threads.filter((thread) => thread.id !== threadId)
+    setThreads(nextThreads)
+    if (threadId === activeThreadId) {
+      setActiveThreadId(nextThreads[0].id)
+      setDraft('')
+    }
+  }
+
   function selectThread(threadId) {
     setActiveThreadId(threadId)
-    setActiveView('chat')
+    navigate('/chat')
     setIsContextPanelOpen(true)
     setDraft('')
   }
 
   function changeView(view) {
-    setActiveView(view)
+    navigate(routeByView[view] || '/chat')
     setIsContextPanelOpen(view === 'chat')
   }
 
@@ -304,19 +416,119 @@ function App() {
     }
   }
 
-  async function submitProfileUpload(formData) {
-    setIsUploadingProfile(true)
+  async function uploadCvProfile(file) {
+    if (!file || isCreatingProfile) return
+    const formData = new FormData()
+    formData.append('file', file)
+    formData.append('extract_profile', 'true')
+
+    setIsCreatingProfile(true)
     setProfilesError('')
     try {
       const created = await uploadProfile(formData)
-      setProfiles((current) => [created, ...current])
+      setProfiles((current) => [created, ...current.filter((profile) => profile.id !== created.id)])
       setSelectedProfileId(created.id)
       setHasLoadedProfiles(true)
+      await loadProfileEnrichment(created.id)
+      setMatchesProfileId(null)
     } catch (error) {
       setProfilesError(error.message)
     } finally {
-      setIsUploadingProfile(false)
+      setIsCreatingProfile(false)
     }
+  }
+
+  async function attachCvToSelectedProfile(file) {
+    if (!selectedProfileId || !file || isAttachingProfileCv) return
+    const formData = new FormData()
+    formData.append('file', file)
+    formData.append('extract_profile', 'true')
+
+    setIsAttachingProfileCv(true)
+    setProfilesError('')
+    try {
+      const updated = await attachProfileCv(selectedProfileId, formData)
+      setProfiles((current) => current.map((profile) => (profile.id === updated.id ? updated : profile)))
+      setHasLoadedProfiles(true)
+      await loadProfileEnrichment(selectedProfileId)
+      setMatchesProfileId(null)
+    } catch (error) {
+      setProfilesError(error.message)
+    } finally {
+      setIsAttachingProfileCv(false)
+    }
+  }
+
+  async function loadProfileEnrichment(profileId = selectedProfileId) {
+    if (!profileId) {
+      setProfileEnrichment({ experiences: [], projects: [], enriched_skills: [] })
+      setEnrichmentProfileId(null)
+      return
+    }
+    setIsLoadingEnrichment(true)
+    setProfilesError('')
+    try {
+      const enrichment = await getProfileEnrichment(profileId)
+      setProfileEnrichment(enrichment)
+      setEnrichmentProfileId(profileId)
+    } catch (error) {
+      setProfilesError(error.message)
+      setProfileEnrichment({ experiences: [], projects: [], enriched_skills: [] })
+      setEnrichmentProfileId(profileId)
+    } finally {
+      setIsLoadingEnrichment(false)
+    }
+  }
+
+  async function mutateProfileEnrichment(action) {
+    if (!selectedProfileId || isSavingEnrichment) return
+    setIsSavingEnrichment(true)
+    setProfilesError('')
+    try {
+      await action(selectedProfileId)
+      await loadProfileEnrichment(selectedProfileId)
+      setMatchesProfileId(null)
+    } catch (error) {
+      setProfilesError(error.message)
+    } finally {
+      setIsSavingEnrichment(false)
+    }
+  }
+
+  function submitProfileExperience(experience) {
+    return mutateProfileEnrichment((profileId) => createProfileExperience(profileId, experience))
+  }
+
+  function saveProfileExperience(experienceId, experience) {
+    return mutateProfileEnrichment((profileId) => updateProfileExperience(profileId, experienceId, experience))
+  }
+
+  function removeProfileExperience(experienceId) {
+    return mutateProfileEnrichment((profileId) => deleteProfileExperience(profileId, experienceId))
+  }
+
+  function submitProfileProject(project) {
+    return mutateProfileEnrichment((profileId) => createProfileProject(profileId, project))
+  }
+
+  function saveProfileProject(projectId, project) {
+    return mutateProfileEnrichment((profileId) => updateProfileProject(profileId, projectId, project))
+  }
+
+  function removeProfileProject(projectId) {
+    return mutateProfileEnrichment((profileId) => deleteProfileProject(profileId, projectId))
+  }
+
+  function submitProfileSkill(skill) {
+    return mutateProfileEnrichment((profileId) => createProfileSkill(profileId, skill))
+  }
+
+  function saveProfileSkill(skillId, skill) {
+    return mutateProfileEnrichment((profileId) => updateProfileSkill(profileId, skillId, skill))
+  }
+
+  function removeProfileSkill(skillId) {
+    return mutateProfileEnrichment((profileId) => deleteProfileSkill(profileId, skillId))
   }
 
   async function loadMatches(profileId = selectedProfileId) {
@@ -339,24 +551,39 @@ function App() {
   return (
     <TooltipProvider>
       <SidebarProvider
-        open={activeView === 'chat' && isContextPanelOpen}
+        open={(activeView === 'chat' || activeView === 'profiles') && isContextPanelOpen}
         onOpenChange={setIsContextPanelOpen}
         style={{
           '--sidebar-width': '22rem',
           '--sidebar-width-icon': '3.25rem',
         }}
       >
-        <AppSidebar activeView={activeView} threads={threads} activeThreadId={activeThreadId} onViewChange={changeView} onThreadSelect={selectThread} onNewThread={createThread} />
+        <AppSidebar
+          activeView={activeView}
+          threads={threads}
+          activeThreadId={activeThreadId}
+          profiles={profiles}
+          selectedProfileId={selectedProfileId}
+          isLoadingProfiles={isLoadingProfiles}
+          onViewChange={changeView}
+          onThreadSelect={selectThread}
+          onNewThread={createThread}
+          onThreadRename={renameThread}
+          onThreadDuplicate={duplicateThread}
+          onThreadDelete={deleteThread}
+          onProfileSelect={setSelectedProfileId}
+          onProfilesRefresh={loadProfiles}
+        />
         <SidebarInset className="chat-root">
           <main className={activeView === 'chat' ? 'chat-page' : 'workspace-page'}>
             {activeView === 'chat' && <ChatView messages={messages} draft={draft} isSending={isSending} selectedProfile={selectedProfile} onDraftChange={setDraft} onSubmit={submitMessage} />}
-            {activeView === 'chat' && (
+            {(activeView === 'chat' || activeView === 'profiles') && (
               <button
                 className="chat-context-toggle"
                 type="button"
                 onClick={() => setIsContextPanelOpen((open) => !open)}
-                aria-label={isContextPanelOpen ? 'Hide conversation list' : 'Show conversation list'}
-                title={isContextPanelOpen ? 'Hide conversation list' : 'Show conversation list'}
+                aria-label={contextPanelToggleLabel(activeView, isContextPanelOpen)}
+                title={contextPanelToggleLabel(activeView, isContextPanelOpen)}
               >
                 {isContextPanelOpen ? <PanelLeftCloseIcon className="size-4" /> : <PanelLeftOpenIcon className="size-4" />}
               </button>
@@ -366,18 +593,28 @@ function App() {
               <ProfilesView
                 profiles={profiles}
                 selectedProfileId={selectedProfileId}
-                isLoading={isLoadingProfiles}
                 isCreating={isCreatingProfile}
-                isUploading={isUploadingProfile}
+                isAttachingCv={isAttachingProfileCv}
+                enrichment={profileEnrichment}
+                isLoadingEnrichment={isLoadingEnrichment}
+                isSavingEnrichment={isSavingEnrichment}
                 error={profilesError}
-                onRefresh={loadProfiles}
-                onSelectProfile={setSelectedProfileId}
                 onCreateProfile={submitProfile}
-                onUploadProfile={submitProfileUpload}
+                onUploadCvProfile={uploadCvProfile}
+                onAttachCv={attachCvToSelectedProfile}
+                onCreateExperience={submitProfileExperience}
+                onUpdateExperience={saveProfileExperience}
+                onDeleteExperience={removeProfileExperience}
+                onCreateProject={submitProfileProject}
+                onUpdateProject={saveProfileProject}
+                onDeleteProject={removeProfileProject}
+                onCreateSkill={submitProfileSkill}
+                onUpdateSkill={saveProfileSkill}
+                onDeleteSkill={removeProfileSkill}
               />
             )}
             {activeView === 'matches' && (
-              <MatchesView selectedProfile={selectedProfile} matches={rankedMatches} isLoading={isLoadingMatches} error={matchesError} onRefresh={() => loadMatches()} onOpenProfiles={() => changeView('profiles')} />
+              <MatchesView selectedProfile={selectedProfile} matches={rankedMatches} isLoading={isLoadingMatches} error={matchesError} onRefresh={() => selectedProfileExists && loadMatches(selectedProfileId)} onOpenProfiles={() => changeView('profiles')} />
             )}
             {activeView !== 'chat' && activeView !== 'jobs' && activeView !== 'profiles' && activeView !== 'matches' && <PlaceholderView view={placeholderViews[activeView]} />}
           </main>
@@ -387,8 +624,25 @@ function App() {
   )
 }
 
+function contextPanelToggleLabel(activeView, isOpen) {
+  if (activeView === 'profiles') {
+    return isOpen ? 'Hide profile list' : 'Show profile list'
+  }
+  return isOpen ? 'Hide conversation list' : 'Show conversation list'
+}
+
 function threadTitle(content) {
   return content.length > 38 ? `${content.slice(0, 35)}...` : content
+}
+
+function cloneMessages(messages) {
+  return messages.map((message) => ({
+    ...message,
+    jobs: message.jobs ? [...message.jobs] : message.jobs,
+    rankedJobs: message.rankedJobs ? [...message.rankedJobs] : message.rankedJobs,
+    warnings: message.warnings ? [...message.warnings] : message.warnings,
+    activities: message.activities ? message.activities.map((activity) => ({ ...activity })) : message.activities,
+  }))
 }
 
 function validStoredThreads(value) {

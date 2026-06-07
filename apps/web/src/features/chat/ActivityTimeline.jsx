@@ -3,7 +3,9 @@ import { formatActivityArgs } from './chatStreamReducer.js'
 
 export function ActivityTimeline({ activities, status, collapsed }) {
   const [isCollapsed, setIsCollapsed] = useState(Boolean(collapsed))
-  const toolCount = activities.filter((activity) => activity.kind === 'tool').length
+  const tools = activities.filter((activity) => activity.kind === 'tool')
+  const toolCount = tools.length
+  const toolLabel = toolCount === 1 ? `Used ${tools[0].title}` : `Used ${toolCount} tools`
   const hasRunning = status === 'running' || activities.some((activity) => activity.status === 'running')
 
   useEffect(() => {
@@ -11,11 +13,11 @@ export function ActivityTimeline({ activities, status, collapsed }) {
   }, [collapsed])
 
   return (
-    <div className="activity-card" data-running={hasRunning}>
+    <div className="activity-card" data-running={hasRunning} data-expanded={!isCollapsed}>
       <button className="activity-summary" type="button" onClick={() => setIsCollapsed((current) => !current)} aria-expanded={!isCollapsed}>
         <span className="activity-pulse" data-status={hasRunning ? 'running' : status || 'completed'} />
-        <strong>{hasRunning ? 'Scout is working' : `Scout used ${toolCount} tool${toolCount === 1 ? '' : 's'}`}</strong>
-        <small>{isCollapsed ? 'Show trace' : 'Hide trace'}</small>
+        <strong>{hasRunning ? 'Working' : toolLabel}</strong>
+        <small>{isCollapsed ? 'Show trace' : 'Hide'}</small>
       </button>
 
       {!isCollapsed && (

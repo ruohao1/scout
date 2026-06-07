@@ -1,4 +1,5 @@
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000'
+const PROFILE_UPLOAD_TIMEOUT_MS = 90_000
 
 export async function sendChatMessage(payload) {
   const response = await fetch(`${API_BASE_URL}/chat`, {
@@ -10,8 +11,7 @@ export async function sendChatMessage(payload) {
   })
 
   if (!response.ok) {
-    const message = await response.text()
-    throw new Error(message || `Chat request failed with HTTP ${response.status}`)
+    throw new Error(await errorMessage(response, `Chat request failed with HTTP ${response.status}`))
   }
 
   return response.json()
@@ -27,8 +27,7 @@ export async function sendChatMessageStream(payload, onEvent) {
   })
 
   if (!response.ok) {
-    const message = await response.text()
-    throw new Error(message || `Chat stream failed with HTTP ${response.status}`)
+    throw new Error(await errorMessage(response, `Chat stream failed with HTTP ${response.status}`))
   }
 
   if (!response.body) {
@@ -65,8 +64,7 @@ export async function listJobs({ limit = 50 } = {}) {
   const response = await fetch(`${API_BASE_URL}/jobs?${params.toString()}`)
 
   if (!response.ok) {
-    const message = await response.text()
-    throw new Error(message || `Jobs request failed with HTTP ${response.status}`)
+    throw new Error(await errorMessage(response, `Jobs request failed with HTTP ${response.status}`))
   }
 
   return response.json()
@@ -77,8 +75,17 @@ export async function listProfiles({ limit = 50 } = {}) {
   const response = await fetch(`${API_BASE_URL}/profiles?${params.toString()}`)
 
   if (!response.ok) {
-    const message = await response.text()
-    throw new Error(message || `Profiles request failed with HTTP ${response.status}`)
+    throw new Error(await errorMessage(response, `Profiles request failed with HTTP ${response.status}`))
+  }
+
+  return response.json()
+}
+
+export async function getProfile(profileId) {
+  const response = await fetch(`${API_BASE_URL}/profiles/${profileId}`)
+
+  if (!response.ok) {
+    throw new Error(await errorMessage(response, `Profile request failed with HTTP ${response.status}`))
   }
 
   return response.json()
@@ -94,25 +101,112 @@ export async function createProfile(profile) {
   })
 
   if (!response.ok) {
-    const message = await response.text()
-    throw new Error(message || `Profile create failed with HTTP ${response.status}`)
+    throw new Error(await errorMessage(response, `Profile create failed with HTTP ${response.status}`))
   }
 
   return response.json()
 }
 
 export async function uploadProfile(formData) {
-  const response = await fetch(`${API_BASE_URL}/profiles/upload`, {
-    method: 'POST',
-    body: formData,
-  })
+  const controller = new AbortController()
+  const timeoutId = window.setTimeout(() => controller.abort(), PROFILE_UPLOAD_TIMEOUT_MS)
+  let response
+  try {
+    response = await fetch(`${API_BASE_URL}/profiles/upload`, {
+      method: 'POST',
+      body: formData,
+      signal: controller.signal,
+    })
+  } catch (error) {
+    if (error instanceof DOMException && error.name === 'AbortError') {
+      throw new Error('Profile upload timed out. Try again with AI extraction disabled.')
+    }
+    throw error
+  } finally {
+    window.clearTimeout(timeoutId)
+  }
 
   if (!response.ok) {
-    const message = await response.text()
-    throw new Error(message || `Profile upload failed with HTTP ${response.status}`)
+    throw new Error(await errorMessage(response, `Profile upload failed with HTTP ${response.status}`))
   }
 
   return response.json()
+}
+
+export async function attachProfileCv(profileId, formData) {
+  const controller = new AbortController()
+  const timeoutId = window.setTimeout(() => controller.abort(), PROFILE_UPLOAD_TIMEOUT_MS)
+  let response
+  try {
+    response = await fetch(`${API_BASE_URL}/profiles/${profileId}/cv`, {
+      method: 'POST',
+      body: formData,
+      signal: controller.signal,
+    })
+  } catch (error) {
+    if (error instanceof DOMException && error.name === 'AbortError') {
+      throw new Error('CV upload timed out. Try a smaller PDF.')
+    }
+    throw error
+  } finally {
+    window.clearTimeout(timeoutId)
+  }
+
+  if (!response.ok) {
+    throw new Error(await errorMessage(response, `CV upload failed with HTTP ${response.status}`))
+  }
+
+  return response.json()
+}
+
+export async function getProfileEnrichment(profileId) {
+  const response = await fetch(`${API_BASE_URL}/profiles/${profileId}/enrichment`)
+
+  if (!response.ok) {
+    throw new Error(await errorMessage(response, `Profile enrichment request failed with HTTP ${response.status}`))
+  }
+
+  return response.json()
+}
+
+export function profileCvUrl(profileId) {
+  return `${API_BASE_URL}/profiles/${profileId}/cv`
+}
+
+export async function createProfileExperience(profileId, experience) {
+  return profileJsonRequest(`/profiles/${profileId}/experiences`, 'POST', experience, 'Profile experience create failed')
+}
+
+export async function updateProfileExperience(profileId, experienceId, experience) {
+  return profileJsonRequest(`/profiles/${profileId}/experiences/${experienceId}`, 'PUT', experience, 'Profile experience update failed')
+}
+
+export async function deleteProfileExperience(profileId, experienceId) {
+  await profileDeleteRequest(`/profiles/${profileId}/experiences/${experienceId}`, 'Profile experience delete failed')
+}
+
+export async function createProfileProject(profileId, project) {
+  return profileJsonRequest(`/profiles/${profileId}/projects`, 'POST', project, 'Profile project create failed')
+}
+
+export async function updateProfileProject(profileId, projectId, project) {
+  return profileJsonRequest(`/profiles/${profileId}/projects/${projectId}`, 'PUT', project, 'Profile project update failed')
+}
+
+export async function deleteProfileProject(profileId, projectId) {
+  await profileDeleteRequest(`/profiles/${profileId}/projects/${projectId}`, 'Profile project delete failed')
+}
+
+export async function createProfileSkill(profileId, skill) {
+  return profileJsonRequest(`/profiles/${profileId}/skills`, 'POST', skill, 'Profile skill create failed')
+}
+
+export async function updateProfileSkill(profileId, skillId, skill) {
+  return profileJsonRequest(`/profiles/${profileId}/skills/${skillId}`, 'PUT', skill, 'Profile skill update failed')
+}
+
+export async function deleteProfileSkill(profileId, skillId) {
+  await profileDeleteRequest(`/profiles/${profileId}/skills/${skillId}`, 'Profile skill delete failed')
 }
 
 export async function rankJobsForProfile({ profileId, filters, limit = 10 }) {
@@ -135,11 +229,51 @@ export async function rankJobsForProfile({ profileId, filters, limit = 10 }) {
   })
 
   if (!response.ok) {
-    const message = await response.text()
-    throw new Error(message || `Rank jobs request failed with HTTP ${response.status}`)
+    throw new Error(await errorMessage(response, `Rank jobs request failed with HTTP ${response.status}`))
   }
 
   return response.json()
 }
 
 export { API_BASE_URL }
+
+async function errorMessage(response, fallback) {
+  const text = await response.text()
+  if (!text) return fallback
+  try {
+    const data = JSON.parse(text)
+    if (typeof data.detail === 'string') return data.detail
+    if (Array.isArray(data.detail)) {
+      return data.detail.map((item) => item.msg || item.message || JSON.stringify(item)).join('; ')
+    }
+  } catch {
+    return text
+  }
+  return text
+}
+
+async function profileJsonRequest(path, method, payload, fallback) {
+  const response = await fetch(`${API_BASE_URL}${path}`, {
+    method,
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(payload),
+  })
+
+  if (!response.ok) {
+    throw new Error(await errorMessage(response, `${fallback} with HTTP ${response.status}`))
+  }
+
+  return response.json()
+}
+
+async function profileDeleteRequest(path, fallback) {
+  const response = await fetch(`${API_BASE_URL}${path}`, {
+    method: 'DELETE',
+  })
+
+  if (!response.ok) {
+    throw new Error(await errorMessage(response, `${fallback} with HTTP ${response.status}`))
+  }
+}

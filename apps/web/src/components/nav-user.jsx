@@ -1,5 +1,6 @@
 import { SidebarMenu, SidebarMenuButton, SidebarMenuItem } from "@/components/ui/sidebar"
 import { UserRoundIcon } from "lucide-react"
+import { NavLink } from "react-router-dom"
 
 export function NavUser({ onProfileClick, isActive = false }) {
   return (
@@ -7,13 +8,15 @@ export function NavUser({ onProfileClick, isActive = false }) {
       <SidebarMenuItem>
         <SidebarMenuButton
           size="lg"
+          asChild
           className="scout-profile-button md:h-8 md:p-0"
-          onClick={onProfileClick}
           isActive={isActive}
           tooltip={{ children: "Profiles", hidden: false }}
         >
-          <UserRoundIcon />
-          <span>Profiles</span>
+          <NavLink to="/profiles" onClick={onProfileClick}>
+            <UserRoundIcon />
+            <span>Profiles</span>
+          </NavLink>
         </SidebarMenuButton>
       </SidebarMenuItem>
     </SidebarMenu>
