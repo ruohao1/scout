@@ -5,10 +5,30 @@ from rag.ranking import rank_search_results
 from rag.types import JobSearchFilters, RankedJob
 
 from .job_search import search_jobs
+from .target_profiles import get_target_profile_with_evidence
 
 
 class ProfileNotFoundError(ValueError):
     pass
+
+
+class TargetProfileNotFoundError(ValueError):
+    pass
+
+
+def rank_jobs_for_target_profile(
+    target_profile_id: str,
+    *,
+    filters: JobSearchFilters | None = None,
+    limit: int = 10,
+) -> list[RankedJob]:
+    target_profile = get_target_profile_with_evidence(target_profile_id)
+    if target_profile is None:
+        raise TargetProfileNotFoundError(f"Target profile not found: {target_profile_id}")
+
+    query = _target_profile_query(target_profile)
+    results = search_jobs(query, filters=filters, limit=max(limit * 5, 20))
+    return rank_search_results(profile=target_profile, results=results)[:limit]
 
 
 def rank_jobs_for_profile(
@@ -26,6 +46,32 @@ def rank_jobs_for_profile(
     query = _profile_query(profile)
     results = search_jobs(query, filters=filters, limit=max(limit * 5, 20))
     return rank_search_results(profile=profile, results=results)[:limit]
+
+
+def _target_profile_query(target_profile: dict) -> str:
+    parts = [
+        target_profile.get("name") or "",
+        target_profile.get("summary") or "",
+        " ".join(target_profile.get("target_roles") or []),
+        " ".join(target_profile.get("must_have_keywords") or []),
+        " ".join(target_profile.get("nice_to_have_keywords") or []),
+    ]
+    for evidence in target_profile.get("evidence") or []:
+        evidence_text = " ".join(
+            part
+            for part in [
+                evidence.get("title") or "",
+                evidence.get("description") or "",
+                " ".join(evidence.get("skills") or []),
+            ]
+            if part
+        )
+        if not evidence_text:
+            continue
+        weight = _weight(evidence.get("weight"))
+        repeat = 3 if weight >= 0.75 else 2 if weight >= 0.5 else 1
+        parts.extend([evidence_text] * repeat)
+    return " ".join(part for part in parts if part).strip()
 
 
 def _profile_query(profile: dict) -> str:
@@ -55,3 +101,9 @@ def _profile_query(profile: dict) -> str:
             ]
         )
     return " ".join(part for part in parts if part).strip()
+
+
+def _weight(value: object) -> float:
+    if isinstance(value, int | float):
+        return max(0.0, min(1.0, float(value)))
+    return 1.0

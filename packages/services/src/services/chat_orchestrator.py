@@ -13,7 +13,7 @@ from providers.types import GenerateRequest, ProviderMessage
 from rag.types import JobSearchFilters
 
 from .chat import ChatResult, respond_to_chat
-from .job_ranking import ProfileNotFoundError, rank_jobs_for_profile
+from .job_ranking import TargetProfileNotFoundError, rank_jobs_for_target_profile
 from .job_providers import JobSpyJobProviderAdapter, JobSpyJobProviderClient, import_jobs
 from .job_search import EmptySearchQueryError, search_jobs
 
@@ -27,6 +27,7 @@ def respond_to_chat_with_tools(
     *,
     message: str,
     history: list[dict[str, Any]] | None = None,
+    target_profile_id: str | None = None,
     profile_id: str | None = None,
     filters: JobSearchFilters | None = None,
     limit: int = 5,
@@ -35,11 +36,19 @@ def respond_to_chat_with_tools(
 ) -> ChatResult:
     planner = provider or OpenAIAuthProvider()
     active_filters = filters or JobSearchFilters()
+    selected_target_profile_id = target_profile_id or profile_id
     try:
         first_response = planner.generate(
             GenerateRequest(
                 model=model,
-                messages=_messages(message=message, history=history, profile_id=profile_id, filters=active_filters, limit=limit),
+                messages=_messages(
+                    message=message,
+                    history=history,
+                    target_profile_id=selected_target_profile_id,
+                    profile_id=profile_id,
+                    filters=active_filters,
+                    limit=limit,
+                ),
                 instructions=_INSTRUCTIONS,
                 tools=_TOOLS,
             )
@@ -52,7 +61,14 @@ def respond_to_chat_with_tools(
         tool_name, tool_args = _tool_name(tool_call), _tool_arguments(tool_call)
         _emit({"type": "tool_started", "id": tool_name or "tool", "tool": tool_name or "unknown", "args": _public_args(tool_args)})
         try:
-            tool_result = _execute_tool(tool_name, tool_args, profile_id=profile_id, filters=active_filters, limit=limit)
+            tool_result = _execute_tool(
+                tool_name,
+                tool_args,
+                target_profile_id=selected_target_profile_id,
+                profile_id=profile_id,
+                filters=active_filters,
+                limit=limit,
+            )
         except Exception as exc:
             tool_result = {"ok": False, "tool": tool_name, "error": _tool_error_message(tool_name, exc), "jobs": [], "ranked_jobs": []}
         if tool_result.get("ok"):
@@ -63,7 +79,14 @@ def respond_to_chat_with_tools(
         final_response = planner.generate(
             GenerateRequest(
                 model=model,
-                messages=_messages(message=message, history=history, profile_id=profile_id, filters=active_filters, limit=limit),
+                messages=_messages(
+                    message=message,
+                    history=history,
+                    target_profile_id=selected_target_profile_id,
+                    profile_id=profile_id,
+                    filters=active_filters,
+                    limit=limit,
+                ),
                 instructions=_INSTRUCTIONS,
                 previous_tool_calls=first_response.tool_calls,
                 tool_results=[_tool_result_message(tool_call, tool_result)],
@@ -73,7 +96,7 @@ def respond_to_chat_with_tools(
         return _chat_result(tool_name=tool_name, tool_result=tool_result, message=final_response.text)
     except ProviderHTTPError as exc:
         _emit({"type": "step_completed", "id": "plan", "summary": "AI planner unavailable; using local fallback"})
-        fallback = respond_to_chat(message=message, profile_id=profile_id, filters=active_filters, limit=limit)
+        fallback = respond_to_chat(message=message, target_profile_id=selected_target_profile_id, filters=active_filters, limit=limit)
         if fallback.tool != "none":
             _emit({"type": "tool_completed", "id": fallback.tool, "summary": _fallback_summary(fallback)})
         return ChatResult(
@@ -85,7 +108,7 @@ def respond_to_chat_with_tools(
         )
     except Exception as exc:
         _emit({"type": "step_completed", "id": "plan", "summary": "AI planner unavailable; using local fallback"})
-        fallback = respond_to_chat(message=message, profile_id=profile_id, filters=active_filters, limit=limit)
+        fallback = respond_to_chat(message=message, target_profile_id=selected_target_profile_id, filters=active_filters, limit=limit)
         return ChatResult(
             message=fallback.message,
             tool=fallback.tool,
@@ -99,11 +122,13 @@ def _messages(
     *,
     message: str,
     history: list[dict[str, Any]] | None,
+    target_profile_id: str | None,
     profile_id: str | None,
     filters: JobSearchFilters,
     limit: int,
 ) -> list[ProviderMessage]:
     context = {
+        "selected_target_profile_id": target_profile_id,
         "selected_profile_id": profile_id,
         "filters": asdict(filters),
         "limit": limit,
@@ -144,6 +169,7 @@ def _execute_tool(
     tool_name: str,
     args: dict[str, Any],
     *,
+    target_profile_id: str | None,
     profile_id: str | None,
     filters: JobSearchFilters,
     limit: int,
@@ -151,7 +177,7 @@ def _execute_tool(
     if tool_name == "search_jobs":
         return _search_tool(args, filters=filters, limit=limit)
     if tool_name == "rank_jobs_for_profile":
-        return _rank_tool(args, profile_id=profile_id, filters=filters, limit=limit)
+        return _rank_tool(args, target_profile_id=target_profile_id, filters=filters, limit=limit)
     if tool_name == "fetch_job_offers":
         return _fetch_job_offers_tool(args, filters=filters, limit=limit)
     if tool_name == "list_profiles":
@@ -239,17 +265,17 @@ def _fetch_job_offers_tool(args: dict[str, Any], *, filters: JobSearchFilters, l
     }
 
 
-def _rank_tool(args: dict[str, Any], *, profile_id: str | None, filters: JobSearchFilters, limit: int) -> dict[str, Any]:
-    selected_profile_id = _string_arg(args.get("profile_id")) or profile_id
-    if not selected_profile_id:
-        return {"ok": False, "tool": "rank_jobs_for_profile", "error": "profile_id is required", "ranked_jobs": []}
+def _rank_tool(args: dict[str, Any], *, target_profile_id: str | None, filters: JobSearchFilters, limit: int) -> dict[str, Any]:
+    selected_target_profile_id = _string_arg(args.get("target_profile_id")) or _string_arg(args.get("profile_id")) or target_profile_id
+    if not selected_target_profile_id:
+        return {"ok": False, "tool": "rank_jobs_for_profile", "error": "target_profile_id is required", "ranked_jobs": []}
     try:
-        ranked = rank_jobs_for_profile(
-            selected_profile_id,
+        ranked = rank_jobs_for_target_profile(
+            selected_target_profile_id,
             filters=_filters(args.get("filters"), fallback=filters),
             limit=_limit(args.get("limit"), fallback=limit),
         )
-    except ProfileNotFoundError as exc:
+    except TargetProfileNotFoundError as exc:
         return {"ok": False, "tool": "rank_jobs_for_profile", "error": str(exc), "ranked_jobs": []}
     return {"ok": True, "tool": "rank_jobs_for_profile", "ranked_jobs": [asdict(job) for job in ranked]}
 
@@ -299,7 +325,7 @@ def _emit(event: dict[str, Any]) -> None:
 
 def _public_args(args: dict[str, Any]) -> dict[str, Any]:
     public: dict[str, Any] = {}
-    for key in ("query", "search_term", "location", "sites", "count", "profile_id", "limit", "filters"):
+    for key in ("query", "search_term", "location", "sites", "count", "target_profile_id", "profile_id", "limit", "filters"):
         if key in args:
             public[key] = args[key]
     return public
@@ -428,10 +454,10 @@ def _string_arg(value: object) -> str | None:
 
 _INSTRUCTIONS = """
 You are Scout, a job-matching workflow assistant.
-Use tools for profile lookup, semantic job search, and deterministic job ranking.
+Use tools for target profile lookup, semantic job search, and deterministic job ranking.
 Use fetch_job_offers when the user asks for fresh, current, new, or live job offers that may not already be indexed.
-Do not invent jobs, profiles, scores, database state, or CV facts.
-If a profile is required but missing, use list_profiles or ask for a profile.
+Do not invent jobs, target profiles, scores, database state, or CV facts.
+If a target profile is required but missing, ask the user to create or select one.
 If tools return no results, explain the missing prerequisite and suggest a next action.
 
 Write user-facing answers in concise Markdown:
@@ -463,11 +489,11 @@ _TOOLS: list[dict[str, Any]] = [
     {
         "type": "function",
         "name": "rank_jobs_for_profile",
-        "description": "Rank indexed jobs against a candidate profile using deterministic scoring.",
+        "description": "Rank indexed jobs against a target profile using deterministic scoring.",
         "parameters": {
             "type": "object",
             "properties": {
-                "profile_id": {"type": "string"},
+                "target_profile_id": {"type": "string"},
                 "filters": {"type": "object"},
                 "limit": {"type": "integer", "minimum": 1, "maximum": 50},
             },

@@ -5,7 +5,7 @@ from dataclasses import asdict, dataclass, field
 
 from rag.types import JobSearchFilters
 
-from .job_ranking import ProfileNotFoundError, rank_jobs_for_profile
+from .job_ranking import TargetProfileNotFoundError, rank_jobs_for_target_profile
 from .job_search import EmptySearchQueryError, search_jobs
 
 
@@ -24,6 +24,7 @@ class ChatResult:
 def respond_to_chat(
     *,
     message: str,
+    target_profile_id: str | None = None,
     profile_id: str | None = None,
     filters: JobSearchFilters | None = None,
     limit: int = 5,
@@ -41,19 +42,20 @@ def respond_to_chat(
 
     merged_filters = _merge_filters(text, filters or JobSearchFilters())
     if intent == "rank":
-        if not profile_id:
+        selected_target_profile_id = target_profile_id or profile_id
+        if not selected_target_profile_id:
             return ChatResult(
-                message=missing_profile_message(),
+                message=missing_target_profile_message(),
                 tool="rank_jobs_for_profile",
-                warnings=["profile_id is required for matching."],
+                warnings=["target_profile_id is required for matching."],
             )
         try:
-            ranked = rank_jobs_for_profile(profile_id, filters=merged_filters, limit=limit)
-        except ProfileNotFoundError:
+            ranked = rank_jobs_for_target_profile(selected_target_profile_id, filters=merged_filters, limit=limit)
+        except TargetProfileNotFoundError:
             return ChatResult(
-                message=profile_not_found_message(),
+                message=target_profile_not_found_message(),
                 tool="rank_jobs_for_profile",
-                warnings=["Profile not found."],
+                warnings=["Target profile not found."],
             )
         except Exception as exc:
             return ChatResult(
@@ -160,23 +162,23 @@ To enable fuller chat:
 """.strip()
 
 
-def missing_profile_message() -> str:
-    return """Select a candidate profile before ranking jobs.
+def missing_target_profile_message() -> str:
+    return """Select or create a target profile before ranking jobs.
 
 Next steps:
 
-- Open **Profiles** and select or create a profile
-- Then ask: `Rank jobs for my profile`
+- Open **Target profiles** and select or create a target profile
+- Then ask: `Rank jobs for my target profile`
 """.strip()
 
 
-def profile_not_found_message() -> str:
-    return """I could not find the selected profile.
+def target_profile_not_found_message() -> str:
+    return """I could not find the selected target profile.
 
 Try this:
 
-- Refresh **Profiles**
-- Select an existing profile
+- Refresh **Target profiles**
+- Select an existing target profile
 - Run ranking again
 """.strip()
 
@@ -193,7 +195,7 @@ Check these prerequisites:
 
 
 def no_ranked_jobs_message() -> str:
-    return """I did not find ranked matches for that profile.
+    return """I did not find ranked matches for that target profile.
 
 Next step:
 
@@ -202,7 +204,7 @@ Next step:
 
 
 def rank_success_message(count: int) -> str:
-    return f"""Ranked **{count} jobs** against your selected profile.
+    return f"""Ranked **{count} jobs** against your selected target profile.
 
 The strongest matches are shown below with skill overlap, location fit, and evidence where available.
 """.strip()

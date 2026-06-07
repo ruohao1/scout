@@ -20,6 +20,7 @@ from .job_providers import AdzunaJobProviderAdapter, AdzunaJobProviderClient, Mo
 class JobWorkflowState(TypedDict, total=False):
     message: str
     history: list[dict[str, Any]]
+    target_profile_id: str | None
     profile_id: str | None
     filters: dict[str, Any]
     limit: int
@@ -40,6 +41,7 @@ def respond_to_chat_with_graph(
     *,
     message: str,
     history: list[dict[str, Any]] | None = None,
+    target_profile_id: str | None = None,
     profile_id: str | None = None,
     filters: JobSearchFilters | None = None,
     limit: int = 5,
@@ -48,7 +50,17 @@ def respond_to_chat_with_graph(
     graph: CompiledWorkflow | None = None,
 ) -> ChatResult:
     workflow = graph or build_job_workflow_graph(provider=provider)
-    state = workflow.invoke(_input_state(message=message, history=history, profile_id=profile_id, filters=filters, limit=limit, model=model or "gpt-5.5"))
+    state = workflow.invoke(
+        _input_state(
+            message=message,
+            history=history,
+            target_profile_id=target_profile_id,
+            profile_id=profile_id,
+            filters=filters,
+            limit=limit,
+            model=model or "gpt-5.5",
+        )
+    )
     return _chat_result_from_state(state)
 
 
@@ -56,6 +68,7 @@ def stream_chat_with_graph(
     *,
     message: str,
     history: list[dict[str, Any]] | None = None,
+    target_profile_id: str | None = None,
     profile_id: str | None = None,
     filters: JobSearchFilters | None = None,
     limit: int = 5,
@@ -66,7 +79,7 @@ def stream_chat_with_graph(
     workflow = graph or build_job_workflow_graph(provider=provider)
     final_state: JobWorkflowState = {}
     for chunk in workflow.stream(
-        _input_state(message=message, history=history, profile_id=profile_id, filters=filters, limit=limit, model=model),
+        _input_state(message=message, history=history, target_profile_id=target_profile_id, profile_id=profile_id, filters=filters, limit=limit, model=model),
         stream_mode=["updates", "custom"],
         version="v2",
     ):
@@ -87,6 +100,7 @@ def _input_state(
     *,
     message: str,
     history: list[dict[str, Any]] | None,
+    target_profile_id: str | None,
     profile_id: str | None,
     filters: JobSearchFilters | None,
     limit: int,
@@ -95,6 +109,7 @@ def _input_state(
     return {
         "message": message,
         "history": history or [],
+        "target_profile_id": target_profile_id,
         "profile_id": profile_id,
         "filters": asdict(filters or JobSearchFilters()),
         "limit": limit,
@@ -307,6 +322,7 @@ def build_job_workflow_graph(*, provider: ChatPlanningProvider | None = None):
         result = respond_to_chat_with_tools(
             message=state.get("message", ""),
             history=state.get("history") or [],
+            target_profile_id=state.get("target_profile_id"),
             profile_id=state.get("profile_id"),
             filters=JobSearchFilters(**(state.get("filters") or {})),
             limit=int(state.get("limit") or 5),

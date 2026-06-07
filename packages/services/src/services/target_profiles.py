@@ -75,6 +75,13 @@ def _evidence_link(link: dict[str, Any]) -> dict[str, Any]:
         "evidence_id": link["evidence_id"],
         "weight": _clamp_weight(link.get("weight")),
         "note": _text(link.get("note")),
+        "type": link.get("evidence_type"),
+        "title": link.get("evidence_title"),
+        "organization": link.get("evidence_organization"),
+        "location": link.get("evidence_location"),
+        "description": link.get("evidence_description"),
+        "skills": link.get("evidence_skills") or [],
+        "confidence": link.get("evidence_confidence"),
     }
 
 

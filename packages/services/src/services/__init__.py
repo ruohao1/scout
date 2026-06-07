@@ -16,7 +16,7 @@ from .job_providers import (
     MockJobProviderClient,
     import_jobs,
 )
-from .job_ranking import ProfileNotFoundError, rank_jobs_for_profile
+from .job_ranking import ProfileNotFoundError, TargetProfileNotFoundError, rank_jobs_for_profile, rank_jobs_for_target_profile
 from .job_search import EmptySearchQueryError, search_jobs
 from .job_skills import enrich_job_skills, extract_job_skills
 from .job_workflow_graph import respond_to_chat_with_graph
@@ -50,6 +50,7 @@ __all__ = [
     "ProfileExtractionError",
     "TargetProfileSuggestionError",
     "TargetProfileSuggestionProvider",
+    "TargetProfileNotFoundError",
     "UnsupportedCVFileError",
     "create_target_profile",
     "explain_ranked_jobs",
@@ -63,6 +64,7 @@ __all__ = [
     "index_candidate_evidence",
     "index_job",
     "rank_jobs_for_profile",
+    "rank_jobs_for_target_profile",
     "respond_to_chat",
     "respond_to_chat_with_graph",
     "respond_to_chat_with_tools",

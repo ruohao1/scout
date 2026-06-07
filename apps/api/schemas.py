@@ -342,6 +342,7 @@ class ChatMessage(BaseModel):
 class ChatRequest(BaseModel):
     message: str
     history: list[ChatMessage] = Field(default_factory=list)
+    target_profile_id: UUID | None = None
     profile_id: UUID | None = None
     filters: SearchFilters = Field(default_factory=SearchFilters)
     limit: int = Field(default=5, ge=1, le=10)
@@ -366,7 +367,8 @@ class ChatResponse(BaseModel):
 
 
 class RankJobsRequest(BaseModel):
-    profile_id: UUID
+    target_profile_id: UUID | None = None
+    profile_id: UUID | None = None
     filters: SearchFilters = Field(default_factory=SearchFilters)
     limit: int = Field(default=10, ge=1, le=50)
 
@@ -380,8 +382,13 @@ class RankedJobResult(BaseModel):
     location_score: float
     contract_type_score: float
     recency_score: float
+    selected_evidence_score: float = 0.0
+    background_evidence_score: float = 0.0
+    keyword_score: float = 0.0
+    penalty_score: float = 0.0
     matched_skills: list[str]
     missing_skills: list[str]
+    matched_evidence: list[dict[str, Any]] = Field(default_factory=list)
     evidence: list[SearchResult]
     company: str | None = None
     location: str | None = None

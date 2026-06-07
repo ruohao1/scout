@@ -19,6 +19,7 @@ def chat(request: ChatRequest) -> dict:
     result = respond_to_chat_with_graph(
         message=request.message,
         history=[message.model_dump() for message in request.history],
+        target_profile_id=str(request.target_profile_id) if request.target_profile_id else None,
         profile_id=str(request.profile_id) if request.profile_id else None,
         filters=JobSearchFilters(**request.filters.model_dump()),
         limit=request.limit,
@@ -36,6 +37,7 @@ def _chat_event_stream(request: ChatRequest):
         for event in stream_chat_with_graph(
             message=request.message,
             history=[message.model_dump() for message in request.history],
+            target_profile_id=str(request.target_profile_id) if request.target_profile_id else None,
             profile_id=str(request.profile_id) if request.profile_id else None,
             filters=JobSearchFilters(**request.filters.model_dump()),
             limit=request.limit,
