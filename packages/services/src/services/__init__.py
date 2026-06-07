@@ -1,4 +1,5 @@
 from .chat import ChatResult, respond_to_chat
+from .chat_router import ChatRoute, route_chat_request, route_chat_request_fallback
 from .chat_orchestrator import respond_to_chat_with_tools
 from .cv_parsing import EmptyCVError, InvalidCVFileError, UnsupportedCVFileError, extract_cv_text
 from .candidate_documents import upload_candidate_cv
@@ -37,6 +38,7 @@ __all__ = [
     "AdzunaJobProviderAdapter",
     "AdzunaJobProviderClient",
     "ChatResult",
+    "ChatRoute",
     "CandidateEvidenceNotFoundError",
     "CandidateSeedFixtureError",
     "EmptyCVError",
@@ -77,6 +79,8 @@ __all__ = [
     "respond_to_chat_with_tools",
     "respond_to_job_search_agent",
     "reindex_all_candidate_evidence",
+    "route_chat_request",
+    "route_chat_request_fallback",
     "search_jobs",
     "seed_fake_candidate",
     "suggest_target_profiles",

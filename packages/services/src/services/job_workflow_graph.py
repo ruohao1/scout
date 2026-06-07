@@ -11,6 +11,7 @@ from langgraph.graph import END, START, StateGraph
 from rag.types import JobSearchFilters
 
 from .chat import ChatResult
+from .chat_router import route_chat_request
 from .chat_orchestrator import ChatPlanningProvider
 from .chat_orchestrator import respond_to_chat_with_tools
 from .job_corpus import get_job_corpus_status
@@ -27,6 +28,7 @@ class JobWorkflowState(TypedDict, total=False):
     limit: int
     model: str
     corpus_status: dict[str, Any]
+    route: dict[str, Any]
     result: dict[str, Any]
 
 
@@ -141,9 +143,38 @@ def build_job_workflow_graph(*, provider: ChatPlanningProvider | None = None):
         _emit({"type": "step_completed", "id": "check_corpus", "summary": f"{status.get('total_jobs', 0)} jobs, {status.get('indexed_jobs', 0)} indexed"})
         return {"corpus_status": status}
 
+    def route_request(state: JobWorkflowState) -> dict[str, Any]:
+        _emit({"type": "step_started", "id": "route_request", "title": "Interpret request"})
+        route = route_chat_request(
+            message=state.get("message", ""),
+            history=state.get("history") or [],
+            target_profile_id=state.get("target_profile_id"),
+            profile_id=state.get("profile_id"),
+            filters=JobSearchFilters(**(state.get("filters") or {})),
+            limit=int(state.get("limit") or 5),
+            model=state.get("model") or "gpt-5.5",
+            provider=provider,
+        )
+        summary = f"Route: {route.route}"
+        if route.query:
+            summary += f" ({route.query})"
+        _emit({"type": "step_completed", "id": "route_request", "summary": summary})
+        warnings = [route.warning] if route.warning else []
+        return {"route": asdict(route), "limit": route.limit or state.get("limit") or 5, "result": {"warnings": warnings} if warnings else {}}
+
     def route_initial(state: JobWorkflowState) -> str:
         message = state.get("message", "")
         history = state.get("history") or []
+        route = state.get("route") or {}
+        route_name = route.get("route")
+        if route_name == "corpus_status":
+            return "check_corpus"
+        if route_name == "job_import":
+            return "check_corpus"
+        if route_name in {"job_search", "job_rank"}:
+            return "job_search_agent"
+        if route_name == "general_chat":
+            return "plan_and_run"
         if _is_corpus_status_request(message):
             return "check_corpus"
         if _is_mock_import_request(message) or (_is_confirmation(message) and _history_requested_mock_import(history)):
@@ -336,6 +367,7 @@ def build_job_workflow_graph(*, provider: ChatPlanningProvider | None = None):
         return {"result": asdict(result)}
 
     def job_search_agent_node(state: JobWorkflowState) -> dict[str, Any]:
+        route = state.get("route") or {}
         result = respond_to_job_search_agent(
             message=state.get("message", ""),
             history=state.get("history") or [],
@@ -343,9 +375,17 @@ def build_job_workflow_graph(*, provider: ChatPlanningProvider | None = None):
             profile_id=state.get("profile_id"),
             filters=JobSearchFilters(**(state.get("filters") or {})),
             limit=int(state.get("limit") or 5),
+            route_query=route.get("query") if isinstance(route.get("query"), str) else None,
+            route_intent=route.get("intent") if isinstance(route.get("intent"), str) else None,
+            route_wants_live=route.get("wants_live") if isinstance(route.get("wants_live"), bool) else None,
         )
-        return {"result": asdict(result)}
+        result_dict = asdict(result)
+        route_warnings = _string_list((state.get("result") or {}).get("warnings"))
+        if route_warnings:
+            result_dict["warnings"] = [*route_warnings, *result_dict.get("warnings", [])]
+        return {"result": result_dict}
 
+    builder.add_node("route_request", route_request)
     builder.add_node("check_corpus", check_corpus)
     builder.add_node("corpus_status_response", corpus_status_response)
     builder.add_node("request_mock_import_confirmation", request_mock_import_confirmation)
@@ -355,7 +395,7 @@ def build_job_workflow_graph(*, provider: ChatPlanningProvider | None = None):
     builder.add_node("plan_and_run", plan_and_run)
     builder.add_node("job_search_agent", job_search_agent_node)
     builder.add_conditional_edges(
-        START,
+        "route_request",
         route_initial,
         {
             "check_corpus": "check_corpus",
@@ -363,6 +403,7 @@ def build_job_workflow_graph(*, provider: ChatPlanningProvider | None = None):
             "plan_and_run": "plan_and_run",
         },
     )
+    builder.add_edge(START, "route_request")
     builder.add_conditional_edges(
         "check_corpus",
         route_after_status,

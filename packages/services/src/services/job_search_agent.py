@@ -28,22 +28,29 @@ def respond_to_job_search_agent(
     filters: JobSearchFilters | None = None,
     limit: int = 5,
     jobspy_importer: JobSpyImporter | None = None,
+    route_query: str | None = None,
+    route_intent: str | None = None,
+    route_wants_live: bool | None = None,
 ) -> ChatResult:
     text = message.strip()
     if not text:
         return ChatResult(message=vague_search_message(), tool="job_search_agent", warnings=["Message must not be empty."])
 
-    search_text = _effective_search_text(text, history or [])
+    search_text = route_query.strip() if isinstance(route_query, str) and route_query.strip() else _effective_search_text(text, history or [])
     active_limit = _requested_limit(text, fallback=limit)
     active_filters = _merge_filters(search_text, filters or JobSearchFilters())
     selected_target_profile_id = target_profile_id or profile_id
     intent = classify_chat_intent(search_text)
+    if route_intent and "rank" in route_intent:
+        intent = "rank"
+    elif route_intent and "search" in route_intent:
+        intent = "search"
     if _looks_like_profile_match(search_text):
         intent = "rank"
     if intent == "chat" and _looks_like_job_search(search_text):
         intent = "search"
     wants_ranking = intent == "rank"
-    wants_live = _wants_live_jobs(text) or _wants_live_jobs(search_text)
+    wants_live = route_wants_live if route_wants_live is not None else _wants_live_jobs(text) or _wants_live_jobs(search_text)
 
     if intent == "vague_search":
         return ChatResult(message=vague_search_message(), tool="job_search_agent", warnings=["Search request needs role, skill, location, or target profile detail."])
@@ -396,6 +403,9 @@ def _job_matches_terms(job: dict[str, Any], terms: set[str]) -> bool:
     )
     if not haystack:
         return False
+    specific_terms = terms - _GENERIC_RELEVANCE_TERMS
+    if specific_terms:
+        return all(term in haystack for term in specific_terms)
     return any(term in haystack for term in terms)
 
 
@@ -570,6 +580,9 @@ def _record_jobspy_run(
 def _normalized_text(text: str) -> str:
     normalized = re.sub(r"[^\w\s-]", " ", text.lower())
     return re.sub(r"\s+", " ", normalized).strip()
+
+
+_GENERIC_RELEVANCE_TERMS = {"developer", "engineer", "engineering", "software", "role", "roles"}
 
 
 def _emit(event: dict[str, Any]) -> None:
