@@ -20,7 +20,7 @@
 ## Safe Checks
 - Python syntax/import check: `uv run python -m compileall main.py apps packages`.
 - Compose config check: `docker compose config --services`.
-- Web production build: run `npm run build` from `apps/web`.
+- Web production build: run `pnpm run build` from `apps/web`.
 - DB setup check requires Postgres first: `docker compose up -d postgres` then `uv run python main.py db setup`.
 
 ## Database
@@ -29,6 +29,9 @@
 - There is no migration framework; `db.schema.setup_database()` creates tables/extensions/indexes idempotently.
 - Provider import run history lives in `provider_import_runs`; schema changes must go through `db.schema.setup_database()` because there is no migration framework.
 - Current job search/ranking uses `job_chunks.embedding vector(1536)` through `db.job_chunks` and `db.search`; `db.pgvector.PgVectorChunkStore` is a generic store, not the active job-search path.
+- Candidate/user knowledge is separate from job-specific target profiles; new ranking/chat code should pass `target_profile_id` rather than legacy `profile_id`.
+- Candidate evidence embeddings live in `candidate_evidence_chunks`; reindex candidate evidence after changing `SCOUT_EMBEDDINGS`, embedding model, or dimensions.
+- Legacy `user_profiles` data can be migrated with `uv run python main.py candidate migrate-profile` or `uv run python main.py candidate migrate-profile --profile-id ...`.
 
 ## Embeddings And Chat
 - Retrieval embeddings live in `rag.embeddings`; local Python defaults to `SCOUT_EMBEDDINGS=gemini`, while the Compose API defaults to `SCOUT_EMBEDDINGS=hash`.

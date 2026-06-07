@@ -1,6 +1,6 @@
 # Scout
 
-Scout is a job-matching RAG backend. It stores job postings and CV profiles, indexes job descriptions into pgvector chunks, searches indexed jobs semantically, ranks jobs against a profile with deterministic scores, and can generate grounded match explanations with the chat provider.
+Scout is a job-matching RAG app. It stores job postings, maintains one candidate knowledge base, indexes job and candidate evidence into pgvector-backed chunks, searches indexed jobs semantically, ranks jobs against target profiles with deterministic scores, and can generate grounded match explanations with the chat provider.
 
 ## Architecture
 
@@ -135,19 +135,72 @@ Tokens are stored in `.auth/openai_auth.json` by default. Set `SCOUT_AUTH_DIR` t
 The current end-to-end flow is:
 
 ```txt
-1. Create a profile
+1. Create or migrate candidate evidence
 2. Create a job
 3. Index the job
 4. Search indexed jobs
-5. Rank jobs against the profile
+5. Rank jobs against a target profile
 6. Explain ranked jobs with the chat model
 ```
 
 Jobs must be indexed before `/search`, `/rank-jobs`, or `/rank-jobs/explain` can find them.
 
+## Candidate Knowledge And Target Profiles
+
+Scout now separates the one candidate knowledge base from job-specific target profiles:
+
+```txt
+Candidate knowledge = durable facts and evidence about one person
+Target profile = one job-search persona used for ranking and chat matching
+```
+
+Candidate evidence can come from manual entries or uploaded CV documents. Evidence rows are embedded into `candidate_evidence_chunks`, while jobs continue to use `job_chunks`. If you change `SCOUT_EMBEDDINGS`, embedding model, or dimensions, reindex jobs and candidate evidence so stored vectors match the active provider.
+
+Create or update the singleton candidate:
+
+```bash
+curl -X PUT http://127.0.0.1:8000/candidate \
+  -H 'Content-Type: application/json' \
+  -d '{"display_name":"Ruohao","headline":"Python cybersecurity student","summary":"Python, Linux, SIEM and backend engineering experience."}'
+```
+
+Upload a CV into candidate documents and extract evidence:
+
+```bash
+curl -X POST http://127.0.0.1:8000/candidate/documents/upload \
+  -F "file=@cv.pdf" \
+  -F "extract_profile=true"
+```
+
+Create a target profile from reviewed evidence:
+
+```bash
+curl -X POST http://127.0.0.1:8000/target-profiles \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "name": "Cybersecurity internship",
+    "summary": "Student-focused SOC and security engineering search.",
+    "target_roles": ["cybersecurity intern", "SOC analyst"],
+    "target_locations": ["Luxembourg"],
+    "preferred_contract_types": ["internship"],
+    "must_have_keywords": ["Python", "Linux", "SIEM"],
+    "nice_to_have_keywords": ["SOC"],
+    "avoid_keywords": [],
+    "evidence": []
+  }'
+```
+
+Legacy `user_profiles` data can be migrated into the candidate model:
+
+```bash
+SCOUT_EMBEDDINGS=hash uv run python main.py candidate migrate-profile
+```
+
+Use `--profile-id` to migrate a specific legacy profile. The migration is idempotent and creates a default target profile linked to migrated evidence.
+
 ## AI Workflow Chat
 
-`POST /chat` uses a LangGraph-backed workflow with OpenAI Auth to plan safe read-only tool calls for profile lookup, job search, and deterministic ranking. If the AI workflow planner is unavailable, Scout falls back to the local keyword router and returns a warning.
+`POST /chat` uses a LangGraph-backed workflow with OpenAI Auth to plan safe read-only tool calls for target-profile matching, job search, and deterministic ranking. If the AI workflow planner is unavailable, Scout falls back to the local keyword router and returns a warning.
 
 The LLM chooses workflow steps and writes the final response, but deterministic services own database reads, retrieval, and ranking scores.
 
@@ -358,7 +411,7 @@ Search returns evidence chunks joined with job metadata.
 curl -X POST http://127.0.0.1:8000/rank-jobs \
   -H 'Content-Type: application/json' \
   -d '{
-    "profile_id": "'"$PROFILE_ID"'",
+    "target_profile_id": "'"$TARGET_PROFILE_ID"'",
     "filters": {
       "location": "Luxembourg",
       "contract_type": "internship"
@@ -371,17 +424,21 @@ Ranking is deterministic:
 
 ```txt
 final_score =
-  0.45 * vector_score
-+ 0.25 * skill_overlap_score
-+ 0.15 * location_score
-+ 0.10 * contract_type_score
+  0.35 * vector_score
++ 0.20 * skill_overlap_score
++ 0.10 * location_score
++ 0.05 * contract_type_score
 + 0.05 * recency_score
++ 0.15 * selected_evidence_score
++ 0.03 * background_evidence_score
++ 0.07 * keyword_score
+- 0.15 * penalty_score
 ```
 
 `missing_skills` is computed from structured fields:
 
 ```txt
-job.skills - profile.skills
+job.skills - target profile skills/evidence keywords
 ```
 
 ## Explain Ranked Jobs
@@ -414,6 +471,21 @@ GET  /jobs/{job_id}
 POST /jobs/{job_id}/index
 POST /providers/adzuna/import
 GET  /providers/import-runs?provider=adzuna
+GET  /candidate
+PUT  /candidate
+GET  /candidate/documents
+POST /candidate/documents/upload
+GET  /candidate/evidence
+POST /candidate/evidence
+PUT  /candidate/evidence/{evidence_id}
+DELETE /candidate/evidence/{evidence_id}
+POST /candidate/evidence/reindex
+GET  /target-profiles
+POST /target-profiles
+POST /target-profiles/suggest
+GET  /target-profiles/{target_profile_id}
+PUT  /target-profiles/{target_profile_id}
+DELETE /target-profiles/{target_profile_id}
 POST /profiles
 GET  /profiles
 GET  /profiles/{profile_id}
@@ -430,6 +502,7 @@ There is no repo-level test, lint, typecheck, formatter, or CI config yet. Curre
 uv sync
 uv run python -m compileall main.py apps packages
 docker compose config --services
+cd apps/web && pnpm run build
 uv run python main.py db setup
 ```
 
@@ -442,7 +515,6 @@ curl http://127.0.0.1:8000/health
 ## Not Built Yet
 
 ```txt
-frontend UI
 scraping
 raw job text normalization
 background workers
