@@ -10,7 +10,13 @@ from rag.types import JobSearchFilters
 
 from .chat import ChatResult, classify_chat_intent, missing_target_profile_message, target_profile_not_found_message, vague_search_message
 from .job_corpus import get_job_corpus_status
-from .job_providers import JobImportResult, JobSpyJobProviderAdapter, JobSpyJobProviderClient, import_jobs
+from .job_providers import (
+    JobImportResult,
+    JobSpyJobProviderAdapter,
+    JobSpyJobProviderClient,
+    configured_jobspy_sites,
+    import_jobs,
+)
 from .job_ranking import TargetProfileNotFoundError, rank_jobs_for_target_profile
 from .job_search import EmptySearchQueryError, search_jobs
 from .target_profiles import get_target_profile_with_evidence
@@ -279,10 +285,11 @@ def _fetch_live_jobs(
 
     count = max(10, min(25, limit * 3))
     country_indeed = _jobspy_country(filters.location)
+    sites = configured_jobspy_sites()
     params = {
         "search_term": search_term,
         "location": filters.location,
-        "sites": ["indeed"],
+        "sites": sites,
         "count": count,
         "hours_old": None,
         "is_remote": filters.remote_policy == "remote" if filters.remote_policy else None,
@@ -295,7 +302,7 @@ def _fetch_live_jobs(
     try:
         result = (importer or import_jobs)(
             client=JobSpyJobProviderClient(
-                site_name=params["sites"],
+                site_name=sites,
                 search_term=search_term,
                 location=filters.location,
                 job_type=params["job_type"],

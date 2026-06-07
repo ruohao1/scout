@@ -40,6 +40,22 @@ class JobImportResult:
     skipped: int = 0
 
 
+SUPPORTED_JOBSPY_SITES = frozenset(
+    {"bayt", "bdjobs", "glassdoor", "google", "indeed", "linkedin", "naukri", "zip_recruiter"}
+)
+DEFAULT_JOBSPY_SITES = ("indeed", "linkedin", "glassdoor", "google")
+
+
+def jobspy_sites(value: object | None = None) -> list[str]:
+    candidates = _site_candidates(value)
+    sites = [site for site in candidates if site in SUPPORTED_JOBSPY_SITES]
+    return sites or list(DEFAULT_JOBSPY_SITES)
+
+
+def configured_jobspy_sites() -> list[str]:
+    return jobspy_sites(os.environ.get("SCOUT_JOBSPY_SITES"))
+
+
 class MockJobProviderClient:
     def __init__(self, *, fixture_path: Path | None = None) -> None:
         self.fixture_path = fixture_path
@@ -564,6 +580,16 @@ def _string_list(value: object) -> list[str]:
     if not isinstance(value, list):
         return []
     return [item.strip() for item in value if isinstance(item, str) and item.strip()]
+
+
+def _site_candidates(value: object | None) -> list[str]:
+    if isinstance(value, str):
+        raw = value.split(",")
+    elif isinstance(value, list):
+        raw = [item for item in value if isinstance(item, str)]
+    else:
+        raw = list(DEFAULT_JOBSPY_SITES)
+    return [site.strip().lower() for site in raw if site.strip()]
 
 
 _MOCK_COMPANIES = ["Northstar Labs", "Cobalt Works", "Meridian Health", "Atlas Fintech"]

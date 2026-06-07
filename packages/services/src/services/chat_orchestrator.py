@@ -14,7 +14,13 @@ from rag.types import JobSearchFilters
 
 from .chat import ChatResult, respond_to_chat
 from .job_ranking import TargetProfileNotFoundError, rank_jobs_for_target_profile
-from .job_providers import JobSpyJobProviderAdapter, JobSpyJobProviderClient, import_jobs
+from .job_providers import (
+    JobSpyJobProviderAdapter,
+    JobSpyJobProviderClient,
+    configured_jobspy_sites,
+    import_jobs,
+    jobspy_sites,
+)
 from .job_search import EmptySearchQueryError, search_jobs
 from .target_profiles import get_target_profile_with_evidence
 
@@ -404,15 +410,9 @@ def _optional_int(value: object) -> int | None:
 
 
 def _sites_arg(value: object) -> list[str]:
-    supported = {"linkedin", "indeed", "glassdoor", "google", "zip_recruiter", "bayt", "bdjobs", "naukri"}
-    if isinstance(value, str):
-        candidates = [value]
-    elif isinstance(value, list):
-        candidates = [item for item in value if isinstance(item, str)]
-    else:
-        candidates = ["indeed"]
-    sites = [site.strip().lower() for site in candidates if site.strip().lower() in supported]
-    return sites or ["indeed"]
+    if value is None:
+        return configured_jobspy_sites()
+    return jobspy_sites(value)
 
 
 def _jobspy_search_filters(*, filters: JobSearchFilters, location: str | None, is_remote: bool | None) -> JobSearchFilters:

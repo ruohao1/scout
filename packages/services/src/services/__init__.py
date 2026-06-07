@@ -17,7 +17,9 @@ from .job_providers import (
     JobSpyJobProviderClient,
     MockJobProviderAdapter,
     MockJobProviderClient,
+    configured_jobspy_sites,
     import_jobs,
+    jobspy_sites,
 )
 from .job_ranking import ProfileNotFoundError, TargetProfileNotFoundError, rank_jobs_for_profile, rank_jobs_for_target_profile
 from .job_search import EmptySearchQueryError, search_jobs
@@ -60,6 +62,7 @@ __all__ = [
     "TargetProfileNotFoundError",
     "UnsupportedCVFileError",
     "create_target_profile",
+    "configured_jobspy_sites",
     "explain_ranked_jobs",
     "extract_cv_text",
     "extract_job_skills",
@@ -68,6 +71,7 @@ __all__ = [
     "get_target_profile_with_evidence",
     "enrich_job_skills",
     "import_jobs",
+    "jobspy_sites",
     "index_candidate_evidence",
     "index_job",
     "is_job_search_agent_request",
