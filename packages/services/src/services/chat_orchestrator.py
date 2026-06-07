@@ -5,7 +5,7 @@ from dataclasses import asdict
 from typing import Any, Protocol
 
 from db.provider_import_runs import ProviderImportRunRepository
-from db.profiles import ProfileRepository
+from db.target_profiles import TargetProfileRepository
 from langgraph.config import get_stream_writer
 from providers.errors import ProviderHTTPError
 from providers.openai_auth import OpenAIAuthProvider
@@ -16,6 +16,7 @@ from .chat import ChatResult, respond_to_chat
 from .job_ranking import TargetProfileNotFoundError, rank_jobs_for_target_profile
 from .job_providers import JobSpyJobProviderAdapter, JobSpyJobProviderClient, import_jobs
 from .job_search import EmptySearchQueryError, search_jobs
+from .target_profiles import get_target_profile_with_evidence
 
 
 class ChatPlanningProvider(Protocol):
@@ -183,7 +184,7 @@ def _execute_tool(
     if tool_name == "list_profiles":
         return _list_profiles_tool(args)
     if tool_name == "get_profile":
-        return _get_profile_tool(args, profile_id=profile_id)
+        return _get_profile_tool(args, target_profile_id=target_profile_id, profile_id=profile_id)
     return {"ok": False, "error": f"Unsupported tool: {tool_name}"}
 
 
@@ -281,16 +282,16 @@ def _rank_tool(args: dict[str, Any], *, target_profile_id: str | None, filters: 
 
 
 def _list_profiles_tool(args: dict[str, Any]) -> dict[str, Any]:
-    profiles = ProfileRepository().list(limit=_limit(args.get("limit"), fallback=10))
+    profiles = TargetProfileRepository().list(limit=_limit(args.get("limit"), fallback=10))
     return {"ok": True, "tool": "list_profiles", "profiles": profiles}
 
 
-def _get_profile_tool(args: dict[str, Any], *, profile_id: str | None) -> dict[str, Any]:
-    selected_profile_id = _string_arg(args.get("profile_id")) or profile_id
+def _get_profile_tool(args: dict[str, Any], *, target_profile_id: str | None, profile_id: str | None) -> dict[str, Any]:
+    selected_profile_id = _string_arg(args.get("target_profile_id")) or _string_arg(args.get("profile_id")) or target_profile_id or profile_id
     if not selected_profile_id:
-        return {"ok": False, "tool": "get_profile", "error": "profile_id is required", "profile": None}
-    profile = ProfileRepository().get(selected_profile_id)
-    return {"ok": profile is not None, "tool": "get_profile", "profile": profile, "error": None if profile else "Profile not found"}
+        return {"ok": False, "tool": "get_profile", "error": "target_profile_id is required", "profile": None}
+    profile = get_target_profile_with_evidence(selected_profile_id)
+    return {"ok": profile is not None, "tool": "get_profile", "profile": profile, "error": None if profile else "Target profile not found"}
 
 
 def _chat_result(*, tool_name: str, tool_result: dict[str, Any], message: str) -> ChatResult:
@@ -339,9 +340,9 @@ def _tool_summary(tool_name: str, tool_result: dict[str, Any]) -> str:
     if tool_name == "rank_jobs_for_profile":
         return f"Ranked {len(tool_result.get('ranked_jobs') or [])} jobs"
     if tool_name == "list_profiles":
-        return f"Found {len(tool_result.get('profiles') or [])} profiles"
+        return f"Found {len(tool_result.get('profiles') or [])} target profiles"
     if tool_name == "get_profile":
-        return "Loaded selected profile" if tool_result.get("profile") else "Profile not found"
+        return "Loaded selected target profile" if tool_result.get("profile") else "Target profile not found"
     return "Tool completed"
 
 
@@ -525,13 +526,13 @@ _TOOLS: list[dict[str, Any]] = [
     {
         "type": "function",
         "name": "list_profiles",
-        "description": "List candidate profiles available for matching.",
+        "description": "List target profiles available for matching.",
         "parameters": {"type": "object", "properties": {"limit": {"type": "integer", "minimum": 1, "maximum": 50}}},
     },
     {
         "type": "function",
         "name": "get_profile",
-        "description": "Get one candidate profile by id.",
-        "parameters": {"type": "object", "properties": {"profile_id": {"type": "string"}}},
+        "description": "Get the selected target profile by id.",
+        "parameters": {"type": "object", "properties": {"target_profile_id": {"type": "string"}, "profile_id": {"type": "string"}}},
     },
 ]

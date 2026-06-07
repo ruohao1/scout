@@ -1,0 +1,195 @@
+{
+  "candidate": {
+    "display_name": "Maya Chen",
+    "headline": "Software Engineer | Backend, Full Stack, Cloud Systems",
+    "summary": "Software engineer with 8 years of experience building product features, backend services, internal tools, and cloud-based systems. Strong fit for software engineering roles involving Python, TypeScript, React, FastAPI, PostgreSQL, testing, Docker, and pragmatic product delivery."
+  },
+  "document": {
+    "filename": "maya-chen-fake-cv.txt",
+    "content_type": "text/plain",
+    "source": "fake_candidate:maya-chen-software-engineer",
+    "text": "Maya Chen\nSoftware Engineer | Backend, Full Stack, Cloud Systems\n\nSummary\nSoftware engineer with 8 years of experience building product features, backend services, internal tools, and cloud-based systems.\nStrong fit for roles involving Python, TypeScript, React, FastAPI, PostgreSQL, testing, Docker, and pragmatic product delivery.\n\nExperience\nSenior Software Engineer, Northstar Labs, London, UK, Apr 2022-present\nBuilt customer-facing features and backend services for workflow automation products using Python, FastAPI, React, TypeScript, PostgreSQL, Docker, and AWS.\n\nSoftware Engineer, Mercury Market, Remote UK, Jan 2019-Mar 2022\nDelivered marketplace features across web, API, and data workflows. Owned service reliability improvements, observability dashboards, and release quality practices.\n\nJunior Software Engineer, Atlas Fintech, Manchester, UK, Jul 2016-Dec 2018\nBuilt REST APIs, internal admin tools, reporting workflows, and integration tests for financial operations teams.\n\nProjects\nTeam Planning Dashboard: built a React and FastAPI app for roadmap planning, team capacity, and delivery status.\nAsync Import Orchestrator: designed provider import workflows with idempotent writes, retries, and structured run history.\nSearch and Matching Prototype: experimented with job matching and explainability using embeddings and candidate evidence.\n\nEducation\nMSc Computer Science, University of Bristol, 2016."
+  },
+  "evidence": [
+    {
+      "type": "experience",
+      "title": "Senior Software Engineer",
+      "organization": "Northstar Labs",
+      "location": "London, UK",
+      "start_date": "2022-04",
+      "is_current": true,
+      "description": "Built customer-facing product features and backend services for workflow automation. Worked across FastAPI services, React interfaces, PostgreSQL data models, Dockerized deployments, and AWS infrastructure. Improved release reliability by adding integration tests and observability dashboards.",
+      "skills": ["Python", "FastAPI", "React", "TypeScript", "PostgreSQL", "Docker", "AWS", "testing"],
+      "metadata": {"seed": "fake_candidate", "candidate_slug": "maya-chen", "source_item": "experience_senior_software"},
+      "confidence": 1.0
+    },
+    {
+      "type": "experience",
+      "title": "Software Engineer",
+      "organization": "Mercury Market",
+      "location": "Remote UK",
+      "start_date": "2019-01",
+      "end_date": "2022-03",
+      "description": "Delivered marketplace features across web, API, and data workflows. Built TypeScript UI components, Python services, background jobs, and dashboards for operational teams. Helped improve incident response with structured logging and service-level metrics.",
+      "skills": ["TypeScript", "React", "Python", "REST APIs", "background jobs", "observability", "CI/CD"],
+      "metadata": {"seed": "fake_candidate", "candidate_slug": "maya-chen", "source_item": "experience_software_engineer"},
+      "confidence": 1.0
+    },
+    {
+      "type": "experience",
+      "title": "Junior Software Engineer",
+      "organization": "Atlas Fintech",
+      "location": "Manchester, UK",
+      "start_date": "2016-07",
+      "end_date": "2018-12",
+      "description": "Built REST APIs, admin tools, reporting workflows, and integration tests for financial operations teams. Improved SQL query performance and collaborated closely with product managers and support teams.",
+      "skills": ["Python", "REST APIs", "SQL", "PostgreSQL", "integration testing", "internal tools"],
+      "metadata": {"seed": "fake_candidate", "candidate_slug": "maya-chen", "source_item": "experience_junior_software"},
+      "confidence": 1.0
+    },
+    {
+      "type": "project",
+      "title": "Team Planning Dashboard",
+      "organization": "Personal project",
+      "description": "Built a full-stack planning dashboard for roadmap items, team capacity, and delivery status. Implemented a React front end, FastAPI backend, PostgreSQL persistence, and Docker-based local development.",
+      "skills": ["React", "TypeScript", "FastAPI", "PostgreSQL", "Docker", "product engineering"],
+      "url": "https://example.com/maya-chen/team-planning-dashboard",
+      "metadata": {"seed": "fake_candidate", "candidate_slug": "maya-chen", "source_item": "project_team_planning_dashboard"},
+      "confidence": 0.95
+    },
+    {
+      "type": "project",
+      "title": "Async Import Orchestrator",
+      "organization": "Northstar Labs",
+      "description": "Designed import orchestration for provider APIs with idempotent writes, retry handling, and structured run history. The system gave operators clear visibility into partial failures and duplicate suppression.",
+      "skills": ["Python", "API integrations", "idempotency", "PostgreSQL", "background jobs", "reliability"],
+      "metadata": {"seed": "fake_candidate", "candidate_slug": "maya-chen", "source_item": "project_import_orchestrator"},
+      "confidence": 0.95
+    },
+    {
+      "type": "project",
+      "title": "Search and Matching Prototype",
+      "organization": "Personal project",
+      "description": "Explored job matching and explainability using embeddings, candidate evidence, and transparent scoring. This was a focused prototype rather than Maya's primary professional specialization.",
+      "skills": ["Python", "embeddings", "RAG", "pgvector", "explainability"],
+      "url": "https://example.com/maya-chen/search-matching-prototype",
+      "metadata": {"seed": "fake_candidate", "candidate_slug": "maya-chen", "source_item": "project_search_matching"},
+      "confidence": 0.9
+    },
+    {
+      "type": "skill",
+      "title": "Python",
+      "description": "Core skill evidenced across backend services, APIs, data workflows, and automation projects.",
+      "skills": ["Python"],
+      "metadata": {"seed": "fake_candidate", "candidate_slug": "maya-chen", "source_item": "skill_python"},
+      "confidence": 0.95
+    },
+    {
+      "type": "skill",
+      "title": "TypeScript",
+      "description": "Used for web application features, frontend state, typed UI components, and integration-heavy product work.",
+      "skills": ["TypeScript"],
+      "metadata": {"seed": "fake_candidate", "candidate_slug": "maya-chen", "source_item": "skill_typescript"},
+      "confidence": 0.95
+    },
+    {
+      "type": "skill",
+      "title": "React",
+      "description": "Used to build customer-facing product interfaces and internal dashboards.",
+      "skills": ["React"],
+      "metadata": {"seed": "fake_candidate", "candidate_slug": "maya-chen", "source_item": "skill_react"},
+      "confidence": 0.95
+    },
+    {
+      "type": "skill",
+      "title": "FastAPI",
+      "description": "Used for production APIs and full-stack product backends.",
+      "skills": ["FastAPI"],
+      "metadata": {"seed": "fake_candidate", "candidate_slug": "maya-chen", "source_item": "skill_fastapi"},
+      "confidence": 0.95
+    },
+    {
+      "type": "skill",
+      "title": "PostgreSQL",
+      "description": "Used for relational data modeling, SQL performance work, reporting, and product persistence.",
+      "skills": ["PostgreSQL", "SQL"],
+      "metadata": {"seed": "fake_candidate", "candidate_slug": "maya-chen", "source_item": "skill_postgresql"},
+      "confidence": 0.95
+    },
+    {
+      "type": "skill",
+      "title": "Docker",
+      "description": "Used for local development, service packaging, and deployment workflows.",
+      "skills": ["Docker"],
+      "metadata": {"seed": "fake_candidate", "candidate_slug": "maya-chen", "source_item": "skill_docker"},
+      "confidence": 0.9
+    },
+    {
+      "type": "skill",
+      "title": "AWS",
+      "description": "Used for cloud deployments, operational tooling, and resilient service architecture.",
+      "skills": ["AWS", "cloud architecture"],
+      "metadata": {"seed": "fake_candidate", "candidate_slug": "maya-chen", "source_item": "skill_aws"},
+      "confidence": 0.9
+    },
+    {
+      "type": "education",
+      "title": "MSc Computer Science",
+      "organization": "University of Bristol",
+      "location": "Bristol, UK",
+      "end_date": "2016",
+      "description": "Focused on software engineering, databases, distributed systems, and human-centered product development.",
+      "skills": ["software engineering", "databases", "distributed systems"],
+      "metadata": {"seed": "fake_candidate", "candidate_slug": "maya-chen", "source_item": "education_msc"},
+      "confidence": 0.9
+    },
+    {
+      "type": "certification",
+      "title": "AWS Certified Solutions Architect - Associate",
+      "organization": "Amazon Web Services",
+      "end_date": "2023",
+      "description": "Validated cloud architecture fundamentals for resilient software systems.",
+      "skills": ["AWS", "cloud architecture", "resilience"],
+      "metadata": {"seed": "fake_candidate", "candidate_slug": "maya-chen", "source_item": "cert_aws_saa"},
+      "confidence": 0.9
+    },
+    {
+      "type": "language",
+      "title": "English",
+      "description": "Native or bilingual proficiency.",
+      "metadata": {"seed": "fake_candidate", "candidate_slug": "maya-chen", "source_item": "language_english"},
+      "confidence": 1.0
+    },
+    {
+      "type": "interest",
+      "title": "Useful Product Engineering",
+      "description": "Enjoys building reliable, understandable software that helps teams ship product improvements with confidence.",
+      "skills": ["product engineering", "developer tools", "debugging", "collaboration"],
+      "metadata": {"seed": "fake_candidate", "candidate_slug": "maya-chen", "source_item": "interest_product_engineering"},
+      "confidence": 0.8
+    }
+  ],
+  "target_profile": {
+    "name": "Software Engineer",
+    "summary": "Software engineering roles that combine backend services, product features, full-stack collaboration, testing, and reliable cloud-based delivery.",
+    "target_roles": ["Software Engineer", "Backend Engineer", "Full Stack Engineer", "Platform Engineer"],
+    "target_locations": ["London", "Paris", "Remote Europe", "Hybrid Europe"],
+    "preferred_contract_types": ["Permanent", "Full-time"],
+    "seniority": "Mid-Senior",
+    "remote_preference": "Remote or hybrid",
+    "must_have_keywords": ["software engineer", "Python", "TypeScript", "React", "API", "PostgreSQL"],
+    "nice_to_have_keywords": ["FastAPI", "Docker", "AWS", "testing", "CI/CD", "full stack"],
+    "avoid_keywords": ["frontend-only", "unpaid internship", "commission-only", "sales-only"],
+    "instructions": "Seeded fake candidate target profile: maya-chen-software-engineer",
+    "evidence": [
+      {"title": "Senior Software Engineer", "weight": 1.0, "note": "Seeded as highly relevant evidence for software engineering roles."},
+      {"title": "Software Engineer", "weight": 0.95, "note": "Seeded as highly relevant evidence for software engineering roles."},
+      {"title": "Team Planning Dashboard", "weight": 0.9, "note": "Seeded as full-stack product engineering evidence."},
+      {"title": "Python", "weight": 0.85, "note": "Seeded as a core software engineering skill."},
+      {"title": "TypeScript", "weight": 0.85, "note": "Seeded as a core software engineering skill."},
+      {"title": "React", "weight": 0.8, "note": "Seeded as product UI engineering evidence."},
+      {"title": "FastAPI", "weight": 0.8, "note": "Seeded as backend API evidence."},
+      {"title": "PostgreSQL", "weight": 0.8, "note": "Seeded as database engineering evidence."}
+    ]
+  }
+}

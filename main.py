@@ -107,6 +107,27 @@ def build_parser() -> argparse.ArgumentParser:
     )
     migrate_profile_parser.set_defaults(handler=migrate_profile)
 
+    seed_fake_parser = candidate_subparsers.add_parser("seed-fake", help="Seed a reusable fake candidate for local testing")
+    seed_fake_parser.add_argument(
+        "--fixture",
+        type=Path,
+        help="Candidate JSON fixture to seed; defaults to the bundled Maya Chen fixture",
+    )
+    seed_fake_parser.add_argument(
+        "--no-index",
+        dest="index",
+        action="store_false",
+        help="Seed candidate evidence without indexing embeddings",
+    )
+    seed_fake_parser.add_argument(
+        "--no-target-profile",
+        dest="target_profile",
+        action="store_false",
+        help="Seed only candidate knowledge without creating a target profile",
+    )
+    seed_fake_parser.set_defaults(handler=seed_fake_candidate_command)
+    seed_fake_parser.set_defaults(index=True, target_profile=True)
+
     auth_parser = subparsers.add_parser("auth", help="Manage provider authentication")
     auth_subparsers = auth_parser.add_subparsers(dest="auth_provider")
 
@@ -225,6 +246,28 @@ def migrate_profile(args: argparse.Namespace) -> int:
     if result["target_profile_id"]:
         print(f"Target profile: {result['target_profile_id']}")
     print(f"Evidence indexed: {result['indexed_count']}")
+    return 0
+
+
+def seed_fake_candidate_command(args: argparse.Namespace) -> int:
+    from services import CandidateSeedFixtureError, seed_fake_candidate
+
+    try:
+        result = seed_fake_candidate(fixture_path=args.fixture, should_index=args.index, with_target_profile=args.target_profile)
+    except CandidateSeedFixtureError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 1
+    except Exception as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 1
+
+    print(f"Candidate: {result['candidate_id']}")
+    print(f"Document: {result['document_id']}")
+    print(f"Evidence seeded: {result['evidence_count']}")
+    if result["target_profile_id"]:
+        print(f"Target profile: {result['target_profile_id']}")
+    if args.index:
+        print(f"Evidence indexed: {result['indexed_count']}")
     return 0
 
 

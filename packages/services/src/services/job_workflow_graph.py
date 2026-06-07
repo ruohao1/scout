@@ -15,6 +15,7 @@ from .chat_orchestrator import ChatPlanningProvider
 from .chat_orchestrator import respond_to_chat_with_tools
 from .job_corpus import get_job_corpus_status
 from .job_providers import AdzunaJobProviderAdapter, AdzunaJobProviderClient, MockJobProviderAdapter, MockJobProviderClient, import_jobs
+from .job_search_agent import is_job_search_agent_request, respond_to_job_search_agent
 
 
 class JobWorkflowState(TypedDict, total=False):
@@ -145,10 +146,12 @@ def build_job_workflow_graph(*, provider: ChatPlanningProvider | None = None):
         history = state.get("history") or []
         if _is_corpus_status_request(message):
             return "check_corpus"
-        if _is_adzuna_import_request(message) or (_is_confirmation(message) and _history_requested_adzuna_import(history)):
-            return "check_corpus"
         if _is_mock_import_request(message) or (_is_confirmation(message) and _history_requested_mock_import(history)):
             return "check_corpus"
+        if _is_adzuna_import_request(message) or (_is_confirmation(message) and _history_requested_adzuna_import(history)):
+            return "check_corpus"
+        if is_job_search_agent_request(message, history=history):
+            return "job_search_agent"
         return "plan_and_run"
 
     def route_after_status(state: JobWorkflowState) -> str:
@@ -332,6 +335,17 @@ def build_job_workflow_graph(*, provider: ChatPlanningProvider | None = None):
         _emit({"type": "step_completed", "id": "plan", "summary": f"Used {result.tool}" if result.tool != "none" else "Answered without a tool"})
         return {"result": asdict(result)}
 
+    def job_search_agent_node(state: JobWorkflowState) -> dict[str, Any]:
+        result = respond_to_job_search_agent(
+            message=state.get("message", ""),
+            history=state.get("history") or [],
+            target_profile_id=state.get("target_profile_id"),
+            profile_id=state.get("profile_id"),
+            filters=JobSearchFilters(**(state.get("filters") or {})),
+            limit=int(state.get("limit") or 5),
+        )
+        return {"result": asdict(result)}
+
     builder.add_node("check_corpus", check_corpus)
     builder.add_node("corpus_status_response", corpus_status_response)
     builder.add_node("request_mock_import_confirmation", request_mock_import_confirmation)
@@ -339,11 +353,13 @@ def build_job_workflow_graph(*, provider: ChatPlanningProvider | None = None):
     builder.add_node("import_mock_jobs", import_mock_jobs_node)
     builder.add_node("import_adzuna_jobs", import_adzuna_jobs_node)
     builder.add_node("plan_and_run", plan_and_run)
+    builder.add_node("job_search_agent", job_search_agent_node)
     builder.add_conditional_edges(
         START,
         route_initial,
         {
             "check_corpus": "check_corpus",
+            "job_search_agent": "job_search_agent",
             "plan_and_run": "plan_and_run",
         },
     )
@@ -364,6 +380,7 @@ def build_job_workflow_graph(*, provider: ChatPlanningProvider | None = None):
     builder.add_edge("request_adzuna_import_confirmation", END)
     builder.add_edge("import_mock_jobs", END)
     builder.add_edge("import_adzuna_jobs", END)
+    builder.add_edge("job_search_agent", END)
     builder.add_edge("plan_and_run", END)
     return builder.compile()
 
@@ -399,7 +416,7 @@ def _is_mock_import_request(message: str) -> bool:
 
 def _is_adzuna_import_request(message: str) -> bool:
     normalized = message.lower()
-    provider_requested = "adzuna" in normalized or "real job" in normalized or "fresh job" in normalized
+    provider_requested = "adzuna" in normalized
     action_requested = any(word in normalized for word in ("fetch", "import", "ingest", "find", "search", "index"))
     return provider_requested and action_requested
 
