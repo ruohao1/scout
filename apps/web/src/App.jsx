@@ -5,32 +5,16 @@ import { TooltipProvider } from '@/components/ui/tooltip'
 import { PanelLeftCloseIcon, PanelLeftOpenIcon } from 'lucide-react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import {
-  attachProfileCv,
-  createProfile,
-  createProfileExperience,
-  createProfileProject,
-  createProfileSkill,
-  deleteProfileExperience,
-  deleteProfileProject,
-  deleteProfileSkill,
-  getProfileEnrichment,
   listTargetProfiles,
   listJobs,
-  listProfiles,
   rankJobsForTargetProfile,
-  rankJobsForProfile,
   sendChatMessageStream,
-  uploadProfile,
-  updateProfileExperience,
-  updateProfileProject,
-  updateProfileSkill,
 } from './api.js'
 import { applyChatStreamEvent, failRunningActivities } from './features/chat/chatStreamReducer.js'
 import { CandidateView } from './features/candidate/CandidateView.jsx'
 import { ChatView } from './features/chat/ChatView.jsx'
 import { JobsView } from './features/jobs/JobsView.jsx'
 import { MatchesView } from './features/matches/MatchesView.jsx'
-import { ProfilesView } from './features/profiles/ProfilesView.jsx'
 import { TargetProfilesView } from './features/target-profiles/TargetProfilesView.jsx'
 import { PlaceholderView } from './features/workspace/PlaceholderView.jsx'
 import { ACTIVE_TARGET_PROFILE_ID_KEY, readStoredBoolean, readStoredJson, readStoredString, writeStoredJson, writeStoredString } from './lib/storage.js'
@@ -134,12 +118,6 @@ function App() {
   const [isLoadingProfiles, setIsLoadingProfiles] = useState(false)
   const [profilesError, setProfilesError] = useState('')
   const [hasLoadedProfiles, setHasLoadedProfiles] = useState(false)
-  const [isCreatingProfile, setIsCreatingProfile] = useState(false)
-  const [isAttachingProfileCv, setIsAttachingProfileCv] = useState(false)
-  const [profileEnrichment, setProfileEnrichment] = useState({ experiences: [], projects: [], enriched_skills: [] })
-  const [enrichmentProfileId, setEnrichmentProfileId] = useState(null)
-  const [isLoadingEnrichment, setIsLoadingEnrichment] = useState(false)
-  const [isSavingEnrichment, setIsSavingEnrichment] = useState(false)
   const [rankedMatches, setRankedMatches] = useState([])
   const [isLoadingMatches, setIsLoadingMatches] = useState(false)
   const [matchesError, setMatchesError] = useState('')
@@ -411,136 +389,6 @@ function App() {
     } finally {
       setIsLoadingProfiles(false)
     }
-  }
-
-  async function submitProfile(profile) {
-    setIsCreatingProfile(true)
-    setProfilesError('')
-    try {
-      const created = await createProfile(profile)
-      setProfiles((current) => [created, ...current])
-      setSelectedProfileId(created.id)
-      setHasLoadedProfiles(true)
-    } catch (error) {
-      setProfilesError(error.message)
-    } finally {
-      setIsCreatingProfile(false)
-    }
-  }
-
-  async function uploadCvProfile(file) {
-    if (!file || isCreatingProfile) return
-    const formData = new FormData()
-    formData.append('file', file)
-    formData.append('extract_profile', 'true')
-
-    setIsCreatingProfile(true)
-    setProfilesError('')
-    try {
-      const created = await uploadProfile(formData)
-      setProfiles((current) => [created, ...current.filter((profile) => profile.id !== created.id)])
-      setSelectedProfileId(created.id)
-      setHasLoadedProfiles(true)
-      await loadProfileEnrichment(created.id)
-      setMatchesProfileId(null)
-    } catch (error) {
-      setProfilesError(error.message)
-    } finally {
-      setIsCreatingProfile(false)
-    }
-  }
-
-  async function attachCvToSelectedProfile(file) {
-    if (!selectedProfileId || !file || isAttachingProfileCv) return
-    const formData = new FormData()
-    formData.append('file', file)
-    formData.append('extract_profile', 'true')
-
-    setIsAttachingProfileCv(true)
-    setProfilesError('')
-    try {
-      const updated = await attachProfileCv(selectedProfileId, formData)
-      setProfiles((current) => current.map((profile) => (profile.id === updated.id ? updated : profile)))
-      setHasLoadedProfiles(true)
-      await loadProfileEnrichment(selectedProfileId)
-      setMatchesProfileId(null)
-    } catch (error) {
-      setProfilesError(error.message)
-    } finally {
-      setIsAttachingProfileCv(false)
-    }
-  }
-
-  async function loadProfileEnrichment(profileId = selectedProfileId) {
-    if (!profileId) {
-      setProfileEnrichment({ experiences: [], projects: [], enriched_skills: [] })
-      setEnrichmentProfileId(null)
-      return
-    }
-    setIsLoadingEnrichment(true)
-    setProfilesError('')
-    try {
-      const enrichment = await getProfileEnrichment(profileId)
-      setProfileEnrichment(enrichment)
-      setEnrichmentProfileId(profileId)
-    } catch (error) {
-      setProfilesError(error.message)
-      setProfileEnrichment({ experiences: [], projects: [], enriched_skills: [] })
-      setEnrichmentProfileId(profileId)
-    } finally {
-      setIsLoadingEnrichment(false)
-    }
-  }
-
-  async function mutateProfileEnrichment(action) {
-    if (!selectedProfileId || isSavingEnrichment) return
-    setIsSavingEnrichment(true)
-    setProfilesError('')
-    try {
-      await action(selectedProfileId)
-      await loadProfileEnrichment(selectedProfileId)
-      setMatchesProfileId(null)
-    } catch (error) {
-      setProfilesError(error.message)
-    } finally {
-      setIsSavingEnrichment(false)
-    }
-  }
-
-  function submitProfileExperience(experience) {
-    return mutateProfileEnrichment((profileId) => createProfileExperience(profileId, experience))
-  }
-
-  function saveProfileExperience(experienceId, experience) {
-    return mutateProfileEnrichment((profileId) => updateProfileExperience(profileId, experienceId, experience))
-  }
-
-  function removeProfileExperience(experienceId) {
-    return mutateProfileEnrichment((profileId) => deleteProfileExperience(profileId, experienceId))
-  }
-
-  function submitProfileProject(project) {
-    return mutateProfileEnrichment((profileId) => createProfileProject(profileId, project))
-  }
-
-  function saveProfileProject(projectId, project) {
-    return mutateProfileEnrichment((profileId) => updateProfileProject(profileId, projectId, project))
-  }
-
-  function removeProfileProject(projectId) {
-    return mutateProfileEnrichment((profileId) => deleteProfileProject(profileId, projectId))
-  }
-
-  function submitProfileSkill(skill) {
-    return mutateProfileEnrichment((profileId) => createProfileSkill(profileId, skill))
-  }
-
-  function saveProfileSkill(skillId, skill) {
-    return mutateProfileEnrichment((profileId) => updateProfileSkill(profileId, skillId, skill))
-  }
-
-  function removeProfileSkill(skillId) {
-    return mutateProfileEnrichment((profileId) => deleteProfileSkill(profileId, skillId))
   }
 
   async function loadMatches(profileId = selectedProfileId) {
