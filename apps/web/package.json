@@ -2,6 +2,7 @@
   "name": "scout-web",
   "version": "0.1.0",
   "private": true,
+  "packageManager": "pnpm@11.3.0",
   "type": "module",
   "scripts": {
     "dev": "vite --host 127.0.0.1",
@@ -17,6 +18,9 @@
     "radix-ui": "^1.4.3",
     "react": "latest",
     "react-dom": "latest",
+    "react-markdown": "^10.1.0",
+    "react-router-dom": "^7.17.0",
+    "remark-gfm": "^4.0.1",
     "tailwind-merge": "^3.6.0",
     "tailwindcss": "^4.3.0",
     "vite": "latest"
