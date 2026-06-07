@@ -89,6 +89,42 @@ class ProviderImportRunRead(BaseModel):
     created_at: datetime
 
 
+class JobSpySettingsRead(BaseModel):
+    sites: list[str]
+    default_count: int
+    supported_sites: list[str]
+    default_sites: list[str]
+    env_sites: list[str]
+
+
+class EmbeddingSettingsRead(BaseModel):
+    provider: str
+    dimensions: int
+    gemini_model: str
+    openai_model: str
+
+
+class RuntimeInfoRead(BaseModel):
+    database: str
+    auth_dir: str
+
+
+class RuntimeSettingsRead(BaseModel):
+    jobspy: JobSpySettingsRead
+    embeddings: EmbeddingSettingsRead
+    runtime: RuntimeInfoRead
+    persisted_keys: list[str]
+
+
+class JobSpySettingsUpdate(BaseModel):
+    sites: list[str] | None = None
+    default_count: int | None = Field(default=None, ge=1, le=25)
+
+
+class RuntimeSettingsUpdate(BaseModel):
+    jobspy: JobSpySettingsUpdate
+
+
 class ProfileCreate(BaseModel):
     name: str | None = None
     cv_text: str = Field(min_length=1)
@@ -356,7 +392,6 @@ class ChatResponse(BaseModel):
         "list_profiles",
         "get_profile",
         "get_job_corpus_status",
-        "import_mock_jobs",
         "import_adzuna_jobs",
         "fetch_job_offers",
         "none",

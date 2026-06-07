@@ -15,9 +15,6 @@ from .job_providers import (
     JobImportResult,
     JobSpyJobProviderAdapter,
     JobSpyJobProviderClient,
-    MockJobProviderAdapter,
-    MockJobProviderClient,
-    configured_jobspy_sites,
     import_jobs,
     jobspy_sites,
 )
@@ -27,6 +24,7 @@ from .job_search_agent import is_job_search_agent_request, respond_to_job_search
 from .job_skills import enrich_job_skills, extract_job_skills
 from .job_workflow_graph import respond_to_chat_with_graph
 from .profile_extraction import ProfileExtractionError, extract_profile_fields
+from .settings import get_jobspy_runtime_settings, get_runtime_settings, update_runtime_settings
 from .target_profiles import (
     TargetProfileSuggestionError,
     TargetProfileSuggestionProvider,
@@ -53,8 +51,6 @@ __all__ = [
     "JobSpyJobProviderClient",
     "LegacyProfileNotFoundError",
     "JobNotFoundError",
-    "MockJobProviderAdapter",
-    "MockJobProviderClient",
     "ProfileNotFoundError",
     "ProfileExtractionError",
     "TargetProfileSuggestionError",
@@ -62,12 +58,13 @@ __all__ = [
     "TargetProfileNotFoundError",
     "UnsupportedCVFileError",
     "create_target_profile",
-    "configured_jobspy_sites",
     "explain_ranked_jobs",
     "extract_cv_text",
     "extract_job_skills",
     "extract_profile_fields",
     "get_job_corpus_status",
+    "get_jobspy_runtime_settings",
+    "get_runtime_settings",
     "get_target_profile_with_evidence",
     "enrich_job_skills",
     "import_jobs",
@@ -89,5 +86,6 @@ __all__ = [
     "seed_fake_candidate",
     "suggest_target_profiles",
     "update_target_profile",
+    "update_runtime_settings",
     "upload_candidate_cv",
 ]

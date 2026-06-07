@@ -14,11 +14,11 @@ from .job_providers import (
     JobImportResult,
     JobSpyJobProviderAdapter,
     JobSpyJobProviderClient,
-    configured_jobspy_sites,
     import_jobs,
 )
 from .job_ranking import TargetProfileNotFoundError, rank_jobs_for_target_profile
 from .job_search import EmptySearchQueryError, search_jobs
+from .settings import get_jobspy_runtime_settings
 from .target_profiles import get_target_profile_with_evidence
 
 
@@ -283,9 +283,10 @@ def _fetch_live_jobs(
     if not search_term:
         return {"ok": False, "warnings": ["Live JobSpy search needs a role, skill, or target profile search term."]}
 
-    count = max(10, min(25, limit * 3))
+    runtime = get_jobspy_runtime_settings()
+    count = runtime.default_count
     country_indeed = _jobspy_country(filters.location)
-    sites = configured_jobspy_sites()
+    sites = runtime.sites
     params = {
         "search_term": search_term,
         "location": filters.location,

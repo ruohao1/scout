@@ -7,7 +7,7 @@ export function JobsView({ jobs, isLoading, error, onRefresh }) {
         <div>
           <p>Jobs</p>
           <h1>Imported opportunities</h1>
-          <span>{jobs.length ? `${jobs.length} postings ready for Scout search and matching.` : 'Seed jobs from the CLI, then refresh this page.'}</span>
+          <span>{jobs.length ? `${jobs.length} postings ready for Scout search and matching.` : 'Ask Scout for latest jobs or import provider jobs, then refresh this page.'}</span>
         </div>
         <button type="button" onClick={onRefresh} disabled={isLoading}>
           {isLoading ? 'Refreshing...' : 'Refresh'}
@@ -32,8 +32,8 @@ export function JobsView({ jobs, isLoading, error, onRefresh }) {
       {!isLoading && !error && jobs.length === 0 && (
         <div className="jobs-state">
           <strong>No jobs imported yet.</strong>
-          <span>Run an indexed mock import, then press Refresh.</span>
-          <code>SCOUT_EMBEDDINGS=hash uv run python main.py jobs import-mock --fixture packages/services/fixtures/mock_jobs.json --index</code>
+          <span>Ask Scout for current live jobs, or import indexed Adzuna jobs from the CLI.</span>
+          <code>SCOUT_EMBEDDINGS=hash uv run python main.py jobs import-adzuna --country gb --what "python developer" --where "London" --count 10</code>
         </div>
       )}
 

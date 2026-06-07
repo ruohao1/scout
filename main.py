@@ -18,30 +18,6 @@ def build_parser() -> argparse.ArgumentParser:
     jobs_parser = subparsers.add_parser("jobs", help="Manage job imports")
     jobs_subparsers = jobs_parser.add_subparsers(dest="jobs_command")
 
-    import_mock_parser = jobs_subparsers.add_parser("import-mock", help="Import mock provider job responses")
-    import_mock_parser.add_argument(
-        "--count",
-        type=int,
-        default=10,
-        help="Number of mock jobs to import",
-    )
-    import_mock_parser.add_argument(
-        "--fixture",
-        type=Path,
-        help="JSON fixture file containing a list of raw mock provider jobs or an object with a jobs list",
-    )
-    import_mock_parser.add_argument(
-        "--index",
-        action="store_true",
-        help="Index imported jobs for search after insertion",
-    )
-    import_mock_parser.add_argument(
-        "--source",
-        default="mock_jobs",
-        help="Source name stored on imported jobs",
-    )
-    import_mock_parser.set_defaults(handler=import_mock_jobs)
-
     import_adzuna_parser = jobs_subparsers.add_parser("import-adzuna", help="Import jobs from the Adzuna API")
     import_adzuna_parser.add_argument(
         "--count",
@@ -161,34 +137,6 @@ def setup_database_command(args: argparse.Namespace) -> int:
 
     setup_database()
     print("Database schema is ready.")
-    return 0
-
-
-def import_mock_jobs(args: argparse.Namespace) -> int:
-    from services import MockJobProviderAdapter, MockJobProviderClient, import_jobs
-
-    if args.count < 0:
-        print("error: --count must be greater than or equal to 0", file=sys.stderr)
-        return 1
-
-    try:
-        result = import_jobs(
-            client=MockJobProviderClient(fixture_path=args.fixture),
-            adapter=MockJobProviderAdapter(source=args.source),
-            count=args.count,
-            should_index=args.index,
-        )
-    except Exception as exc:
-        print(f"error: {exc}", file=sys.stderr)
-        return 1
-
-    print(f"Imported {len(result.created)} mock jobs.")
-    if result.skipped:
-        print(f"Skipped {result.skipped} duplicate mock jobs.")
-    if args.index:
-        print(f"Indexed {result.indexed} mock jobs.")
-    for job in result.created:
-        print(job["id"])
     return 0
 
 

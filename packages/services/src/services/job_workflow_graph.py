@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from dataclasses import asdict
-from pathlib import Path
 import re
 from typing import Any, Iterator, Protocol, TypedDict
 
@@ -15,7 +14,7 @@ from .chat_router import route_chat_request
 from .chat_orchestrator import ChatPlanningProvider
 from .chat_orchestrator import respond_to_chat_with_tools
 from .job_corpus import get_job_corpus_status
-from .job_providers import AdzunaJobProviderAdapter, AdzunaJobProviderClient, MockJobProviderAdapter, MockJobProviderClient, import_jobs
+from .job_providers import AdzunaJobProviderAdapter, AdzunaJobProviderClient, import_jobs
 from .job_search_agent import is_job_search_agent_request, respond_to_job_search_agent
 
 
@@ -176,8 +175,6 @@ def build_job_workflow_graph(*, provider: ChatPlanningProvider | None = None):
             return "plan_and_run"
         if _is_corpus_status_request(message):
             return "check_corpus"
-        if _is_mock_import_request(message) or (_is_confirmation(message) and _history_requested_mock_import(history)):
-            return "check_corpus"
         if _is_adzuna_import_request(message) or (_is_confirmation(message) and _history_requested_adzuna_import(history)):
             return "check_corpus"
         if is_job_search_agent_request(message, history=history):
@@ -190,8 +187,6 @@ def build_job_workflow_graph(*, provider: ChatPlanningProvider | None = None):
             return "corpus_status_response"
         if _is_adzuna_import_request(message) or (_is_confirmation(message) and _history_requested_adzuna_import(state.get("history") or [])):
             return "import_adzuna_jobs" if _is_confirmation(message) else "request_adzuna_import_confirmation"
-        if _is_mock_import_request(message) or (_is_confirmation(message) and _history_requested_mock_import(state.get("history") or [])):
-            return "import_mock_jobs" if _is_confirmation(message) else "request_mock_import_confirmation"
         return "plan_and_run"
 
     def corpus_status_response(state: JobWorkflowState) -> dict[str, Any]:
@@ -208,66 +203,6 @@ def build_job_workflow_graph(*, provider: ChatPlanningProvider | None = None):
         _emit({"type": "tool_completed", "id": "get_job_corpus_status", "summary": "Read corpus status"})
         _emit({"type": "step_completed", "id": "summarize", "summary": "Prepared corpus summary"})
         return {"result": {"message": message, "tool": "get_job_corpus_status", "jobs": [], "ranked_jobs": [], "warnings": warnings}}
-
-    def request_mock_import_confirmation(state: JobWorkflowState) -> dict[str, Any]:
-        _emit({"type": "step_started", "id": "confirm_import", "title": "Request import confirmation"})
-        status = state.get("corpus_status") or {}
-        message = (
-            "I can import and index **10 mock jobs** for local testing.\n\n"
-            "Current corpus:\n\n"
-            f"- **Total jobs:** {status.get('total_jobs', 0)}\n"
-            f"- **Indexed jobs:** {status.get('indexed_jobs', 0)}\n\n"
-            "Reply **yes** to proceed."
-        )
-        _emit({"type": "step_completed", "id": "confirm_import", "summary": "Waiting for user confirmation"})
-        return {
-            "result": {
-                "message": message,
-                "tool": "get_job_corpus_status",
-                "jobs": [],
-                "ranked_jobs": [],
-                "warnings": ["confirm_import_mock_jobs"],
-            }
-        }
-
-    def import_mock_jobs_node(state: JobWorkflowState) -> dict[str, Any]:
-        _emit({"type": "step_started", "id": "import_mock_jobs", "title": "Import mock jobs"})
-        _emit({"type": "tool_started", "id": "import_mock_jobs", "tool": "import_mock_jobs", "args": {"count": 10, "index": True}})
-        try:
-            result = import_jobs(
-                client=MockJobProviderClient(fixture_path=_mock_fixture_path()),
-                adapter=MockJobProviderAdapter(),
-                count=10,
-                should_index=True,
-            )
-        except Exception as exc:
-            _emit({"type": "tool_failed", "id": "import_mock_jobs", "summary": str(exc)})
-            _emit({"type": "step_failed", "id": "import_mock_jobs", "summary": "Mock import failed"})
-            return {
-                "result": {
-                    "message": (
-                        "I could not import and index mock jobs.\n\n"
-                        "Check these items:\n\n"
-                        "- Database is running\n"
-                        "- Job schema has been set up\n"
-                        "- Embedding provider is configured"
-                    ),
-                    "tool": "import_mock_jobs",
-                    "jobs": [],
-                    "ranked_jobs": [],
-                    "warnings": [str(exc)],
-                }
-            }
-        message = (
-            "Mock jobs are ready.\n\n"
-            f"- **Imported:** {len(result.created)}\n"
-            f"- **Skipped duplicates:** {result.skipped}\n"
-            f"- **Indexed:** {result.indexed}\n\n"
-            "You can now ask Scout to search or rank these jobs."
-        )
-        _emit({"type": "tool_completed", "id": "import_mock_jobs", "summary": message})
-        _emit({"type": "step_completed", "id": "import_mock_jobs", "summary": message})
-        return {"result": {"message": message, "tool": "import_mock_jobs", "jobs": [], "ranked_jobs": [], "warnings": []}}
 
     def request_adzuna_import_confirmation(state: JobWorkflowState) -> dict[str, Any]:
         _emit({"type": "step_started", "id": "confirm_adzuna_import", "title": "Request Adzuna import confirmation"})
@@ -384,9 +319,7 @@ def build_job_workflow_graph(*, provider: ChatPlanningProvider | None = None):
     builder.add_node("route_request", route_request)
     builder.add_node("check_corpus", check_corpus)
     builder.add_node("corpus_status_response", corpus_status_response)
-    builder.add_node("request_mock_import_confirmation", request_mock_import_confirmation)
     builder.add_node("request_adzuna_import_confirmation", request_adzuna_import_confirmation)
-    builder.add_node("import_mock_jobs", import_mock_jobs_node)
     builder.add_node("import_adzuna_jobs", import_adzuna_jobs_node)
     builder.add_node("plan_and_run", plan_and_run)
     builder.add_node("job_search_agent", job_search_agent_node)
@@ -405,17 +338,13 @@ def build_job_workflow_graph(*, provider: ChatPlanningProvider | None = None):
         route_after_status,
         {
             "corpus_status_response": "corpus_status_response",
-            "request_mock_import_confirmation": "request_mock_import_confirmation",
             "request_adzuna_import_confirmation": "request_adzuna_import_confirmation",
-            "import_mock_jobs": "import_mock_jobs",
             "import_adzuna_jobs": "import_adzuna_jobs",
             "plan_and_run": "plan_and_run",
         },
     )
     builder.add_edge("corpus_status_response", END)
-    builder.add_edge("request_mock_import_confirmation", END)
     builder.add_edge("request_adzuna_import_confirmation", END)
-    builder.add_edge("import_mock_jobs", END)
     builder.add_edge("import_adzuna_jobs", END)
     builder.add_edge("job_search_agent", END)
     builder.add_edge("plan_and_run", END)
@@ -461,11 +390,6 @@ def _is_corpus_status_request(message: str) -> bool:
     return any(phrase in normalized for phrase in ("corpus status", "indexed jobs", "how many jobs", "job count"))
 
 
-def _is_mock_import_request(message: str) -> bool:
-    normalized = message.lower()
-    return "mock" in normalized and any(word in normalized for word in ("import", "ingest", "seed", "index"))
-
-
 def _is_adzuna_import_request(message: str) -> bool:
     normalized = message.lower()
     provider_requested = "adzuna" in normalized
@@ -476,16 +400,6 @@ def _is_adzuna_import_request(message: str) -> bool:
 def _is_confirmation(message: str) -> bool:
     normalized = message.strip().lower()
     return normalized in {"yes", "y", "ok", "okay", "proceed", "go ahead", "confirm", "do it"}
-
-
-def _history_requested_mock_import(history: list[dict[str, Any]]) -> bool:
-    for item in history[-4:]:
-        content = item.get("content")
-        if isinstance(content, str) and "confirm_import_mock_jobs" in content:
-            return True
-        if isinstance(content, str) and "import and index 10 mock jobs" in content.lower():
-            return True
-    return False
 
 
 def _history_requested_adzuna_import(history: list[dict[str, Any]]) -> bool:
@@ -592,7 +506,3 @@ def _record_adzuna_run(
             "error": error,
         }
     )
-
-
-def _mock_fixture_path() -> Path:
-    return Path(__file__).resolve().parents[2] / "fixtures" / "mock_jobs.json"

@@ -17,11 +17,11 @@ from .job_ranking import TargetProfileNotFoundError, rank_jobs_for_target_profil
 from .job_providers import (
     JobSpyJobProviderAdapter,
     JobSpyJobProviderClient,
-    configured_jobspy_sites,
     import_jobs,
     jobspy_sites,
 )
 from .job_search import EmptySearchQueryError, search_jobs
+from .settings import get_jobspy_runtime_settings
 from .target_profiles import get_target_profile_with_evidence
 
 
@@ -210,8 +210,9 @@ def _fetch_job_offers_tool(args: dict[str, Any], *, filters: JobSearchFilters, l
     if not search_term:
         return {"ok": False, "tool": "fetch_job_offers", "error": "search_term is required", "jobs": []}
 
+    runtime = get_jobspy_runtime_settings()
     tool_limit = _limit(args.get("limit"), fallback=limit)
-    count = _offer_count(args.get("count"), fallback=max(10, tool_limit))
+    count = _offer_count(args.get("count"), fallback=runtime.default_count)
     sites = _sites_arg(args.get("sites"))
     location = _string_arg(args.get("location")) or filters.location
     country_indeed = _string_arg(args.get("country_indeed")) or "UK"
@@ -411,7 +412,7 @@ def _optional_int(value: object) -> int | None:
 
 def _sites_arg(value: object) -> list[str]:
     if value is None:
-        return configured_jobspy_sites()
+        return get_jobspy_runtime_settings().sites
     return jobspy_sites(value)
 
 

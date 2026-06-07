@@ -12,6 +12,7 @@ from .routes.profiles import router as profiles_router
 from .routes.providers import router as providers_router
 from .routes.ranking import router as ranking_router
 from .routes.search import router as search_router
+from .routes.settings import router as settings_router
 from .routes.target_profiles import router as target_profiles_router
 
 
@@ -33,6 +34,7 @@ def create_app() -> FastAPI:
     app.include_router(providers_router)
     app.include_router(ranking_router)
     app.include_router(search_router)
+    app.include_router(settings_router)
     app.include_router(target_profiles_router)
     return app
 

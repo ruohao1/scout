@@ -11,7 +11,7 @@
 - Run the API with `uv run uvicorn apps.api.main:app --host 127.0.0.1 --port 8000 --reload`.
 - Web commands run from `apps/web`: `pnpm install`, `pnpm run dev`, `pnpm run build`, `pnpm run preview`.
 - Web Docker builds use `apps/web/pnpm-lock.yaml` with `pnpm install --frozen-lockfile`; do not regenerate or commit `package-lock.json`.
-- Import and index mock jobs locally with `SCOUT_EMBEDDINGS=hash uv run python main.py jobs import-mock --count 10 --index`.
+- Ask Scout for latest/live/current jobs to import and index JobSpy results; editable JobSpy sites/default count live in `/settings` and `GET/PUT /settings/runtime`.
 - Import and index Adzuna jobs with `ADZUNA_APP_ID=... ADZUNA_APP_KEY=... SCOUT_EMBEDDINGS=hash uv run python main.py jobs import-adzuna --country gb --what "python developer" --where "London" --count 10`; use `--no-index` to skip indexing.
 - The API equivalent is `POST /providers/adzuna/import`; `GET /jobs` supports `source` and `indexed` query filters and returns `indexed_chunks`/`is_indexed`; `GET /providers/import-runs` lists persisted provider import runs.
 - OpenAI OAuth login is `uv run python main.py auth openai login --no-browser`; omit `--no-browser` only when opening a browser is intended.
@@ -39,6 +39,7 @@
 - Keep `SCOUT_EMBEDDING_DIMENSIONS`, the embedding provider output, and the `job_chunks.embedding` schema/indexed data aligned; re-index jobs after changing provider, model, or dimensions.
 - Chat/reasoning, profile extraction, and explanations use `providers.openai_auth.OpenAIAuthProvider`, not `OPENAI_API_KEY`; this is separate from retrieval embeddings.
 - The LangGraph chat workflow can call JobSpy through `fetch_job_offers`; this imports and indexes live jobs, records `provider_import_runs` with provider `jobspy`, and may hit external job-board/network behavior.
+- `SCOUT_JOBSPY_SITES` defaults JobSpy sites before persisted settings exist; supported values are `indeed`, `linkedin`, `glassdoor`, `google`, `zip_recruiter`, `bayt`, `bdjobs`, and `naukri`.
 - OpenAI OAuth tokens default to `.auth/openai_auth.json` (ignored by git); set `SCOUT_AUTH_DIR` to keep credentials outside the repo.
 - `OpenAICodexOAuth.login_browser()` starts a localhost callback on port `1455` and may open a browser; do not run OAuth login as routine verification.
 - `OpenAIAuthProvider.generate()` calls `https://chatgpt.com/backend-api/codex/responses`; tests should fake OAuth/token storage and HTTP.

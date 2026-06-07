@@ -227,6 +227,15 @@ def setup_database(*, url: str | None = None) -> None:
             )
             """
         )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS app_settings (
+                key text PRIMARY KEY,
+                value jsonb NOT NULL,
+                updated_at timestamptz NOT NULL DEFAULT now()
+            )
+            """
+        )
         conn.execute("CREATE INDEX IF NOT EXISTS jobs_location_idx ON jobs (location)")
         conn.execute("CREATE INDEX IF NOT EXISTS jobs_contract_type_idx ON jobs (contract_type)")
         conn.execute("CREATE INDEX IF NOT EXISTS jobs_seniority_idx ON jobs (seniority)")
@@ -250,6 +259,7 @@ def setup_database(*, url: str | None = None) -> None:
         conn.execute("CREATE INDEX IF NOT EXISTS target_profile_evidence_evidence_id_idx ON target_profile_evidence (evidence_id)")
         conn.execute("CREATE INDEX IF NOT EXISTS provider_import_runs_provider_idx ON provider_import_runs (provider)")
         conn.execute("CREATE INDEX IF NOT EXISTS provider_import_runs_created_at_idx ON provider_import_runs (created_at DESC)")
+        conn.execute("CREATE INDEX IF NOT EXISTS app_settings_updated_at_idx ON app_settings (updated_at DESC)")
         conn.execute("CREATE INDEX IF NOT EXISTS user_profiles_skills_gin_idx ON user_profiles USING gin (skills)")
         conn.execute(
             """

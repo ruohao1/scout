@@ -377,6 +377,216 @@ textarea {
   font-weight: 800;
 }
 
+.settings-view {
+  width: min(1120px, 100%);
+  min-height: 100svh;
+  margin: 0 auto;
+  padding: clamp(24px, 5vw, 56px) 20px;
+}
+
+.settings-hero {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 24px;
+  margin-bottom: 26px;
+}
+
+.settings-hero p,
+.settings-panel-heading p {
+  margin: 0 0 12px;
+  color: var(--green);
+  font-size: 0.78rem;
+  font-weight: 900;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.settings-hero h1 {
+  margin: 0;
+  max-width: 13ch;
+  color: var(--foreground);
+  font-size: clamp(2.55rem, 6vw, 5.4rem);
+  font-weight: 1000;
+  letter-spacing: -0.09em;
+  line-height: 0.9;
+}
+
+.settings-hero span,
+.settings-panel-heading span,
+.settings-count-field span {
+  display: block;
+  max-width: 640px;
+  margin-top: 14px;
+  color: var(--muted);
+  font-size: 0.95rem;
+  line-height: 1.65;
+}
+
+.settings-hero button,
+.settings-actions button:first-child {
+  border: 0;
+  border-radius: 999px;
+  background: var(--green);
+  color: white;
+  padding: 12px 18px;
+  font-weight: 900;
+  cursor: pointer;
+  box-shadow: 0 14px 34px rgba(49, 83, 63, 0.16);
+}
+
+.settings-hero button:disabled,
+.settings-actions button:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.settings-alert {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 18px;
+  border: 1px solid rgba(223, 231, 223, 0.88);
+  border-radius: 1.25rem;
+  background: rgba(255, 254, 251, 0.84);
+  color: var(--green);
+  padding: 16px 18px;
+}
+
+.settings-alert strong {
+  color: inherit;
+}
+
+.settings-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.25fr) minmax(260px, 0.75fr);
+  gap: 16px;
+  align-items: start;
+}
+
+.settings-panel {
+  border: 1px solid rgba(223, 231, 223, 0.9);
+  border-radius: 1.75rem;
+  background: rgba(255, 254, 251, 0.84);
+  padding: clamp(18px, 3vw, 28px);
+  box-shadow: 0 20px 68px rgba(47, 66, 52, 0.08);
+}
+
+.settings-panel-primary {
+  grid-row: span 2;
+}
+
+.settings-panel-heading {
+  margin-bottom: 18px;
+}
+
+.settings-panel-heading.compact {
+  margin-bottom: 12px;
+}
+
+.settings-panel-heading h2 {
+  margin: 0;
+  color: var(--foreground);
+  font-size: clamp(1.65rem, 4vw, 2.85rem);
+  font-weight: 1000;
+  letter-spacing: -0.07em;
+  line-height: 0.95;
+}
+
+.settings-site-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 18px;
+}
+
+.settings-site-option {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border: 1px solid rgba(223, 231, 223, 0.88);
+  border-radius: 1rem;
+  background: rgba(247, 242, 232, 0.5);
+  color: var(--foreground);
+  padding: 12px;
+  font-weight: 900;
+  text-transform: capitalize;
+}
+
+.settings-site-option input {
+  width: 1.05rem;
+  height: 1.05rem;
+  accent-color: var(--green);
+}
+
+.settings-count-field {
+  display: grid;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-weight: 900;
+}
+
+.settings-count-field input {
+  width: min(220px, 100%);
+  border: 0;
+  outline: 0;
+  background: rgba(255, 254, 251, 0.76);
+  color: var(--foreground);
+  box-shadow: inset 0 -1px 0 rgba(49, 83, 63, 0.18);
+  padding: 11px 0;
+  font: inherit;
+  font-weight: 800;
+}
+
+.settings-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 22px;
+}
+
+.settings-actions button:last-child {
+  border: 1px solid rgba(49, 83, 63, 0.18);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--green);
+  padding: 12px 18px;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.settings-facts {
+  display: grid;
+  gap: 12px;
+}
+
+.settings-fact {
+  display: grid;
+  gap: 5px;
+  border-top: 1px solid rgba(49, 83, 63, 0.1);
+  padding-top: 12px;
+}
+
+.settings-fact:first-child {
+  border-top: 0;
+  padding-top: 0;
+}
+
+.settings-fact span {
+  color: var(--muted);
+  font-size: 0.75rem;
+  font-weight: 900;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.settings-fact strong {
+  color: var(--foreground);
+  font-size: 0.95rem;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
 .warning-state {
   border-color: #e5c8a7;
   background: var(--warning-bg);
@@ -2539,6 +2749,24 @@ textarea {
 
   .jobs-header button {
     width: 100%;
+  }
+
+  .settings-hero {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .settings-hero button {
+    width: 100%;
+  }
+
+  .settings-grid,
+  .settings-site-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .settings-panel-primary {
+    grid-row: auto;
   }
 
   .transcript {

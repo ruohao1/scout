@@ -14,7 +14,7 @@ from .chat import classify_chat_intent
 
 
 ChatRouteName = Literal["corpus_status", "job_import", "job_search", "job_rank", "general_chat"]
-JobImportProvider = Literal["mock", "adzuna"]
+JobImportProvider = Literal["adzuna"]
 
 
 @dataclass(frozen=True)
@@ -91,8 +91,6 @@ def route_chat_request_fallback(
     normalized = _normalized_text(text)
     if _is_corpus_status_request(normalized):
         return ChatRoute(route="corpus_status", intent="corpus_status", limit=limit, confidence=1.0, reason="User asked about indexed job corpus status.", used_fallback=True)
-    if _is_mock_import_request(normalized):
-        return ChatRoute(route="job_import", intent="import_mock_jobs", import_provider="mock", needs_confirmation=True, limit=limit, confidence=1.0, reason="User asked to seed/import mock jobs.", used_fallback=True)
     if _is_adzuna_import_request(normalized):
         return ChatRoute(route="job_import", intent="import_adzuna_jobs", import_provider="adzuna", needs_confirmation=True, query=_clean_search_query(text), limit=_requested_limit(text, fallback=limit), confidence=1.0, reason="User asked for Adzuna import.", used_fallback=True)
     if _is_confirmation(normalized):
@@ -117,7 +115,7 @@ def _route_from_ai_response(text: str, *, fallback_limit: int) -> ChatRoute:
         filters=filters,
         limit=_limit(payload.get("limit"), fallback=fallback_limit),
         wants_live=bool(payload.get("wants_live")),
-        import_provider=payload.get("import_provider") if payload.get("import_provider") in {"mock", "adzuna"} else None,
+        import_provider=payload.get("import_provider") if payload.get("import_provider") == "adzuna" else None,
         needs_confirmation=bool(payload.get("needs_confirmation")),
         confidence=_confidence(payload.get("confidence")),
         reason=_string(payload.get("reason")) or "AI router selected this route.",
@@ -165,10 +163,6 @@ def _requested_limit(text: str, *, fallback: int) -> int:
 
 def _is_corpus_status_request(normalized: str) -> bool:
     return any(phrase in normalized for phrase in ("corpus status", "indexed jobs", "how many jobs", "job count"))
-
-
-def _is_mock_import_request(normalized: str) -> bool:
-    return "mock" in normalized and any(word in normalized for word in ("import", "ingest", "seed", "index"))
 
 
 def _is_adzuna_import_request(normalized: str) -> bool:
@@ -225,7 +219,7 @@ Return only one JSON object with these fields:
 - filters: object with optional location, contract_type, company, seniority, remote_policy
 - limit: requested result count, or the provided default; do not treat technology versions as limits
 - wants_live: true only when user asks for fresh/live/current/new/latest/online jobs
-- import_provider: mock, adzuna, or null
+- import_provider: adzuna or null
 - needs_confirmation: true for imports that should ask before running
 - confidence: 0.0 to 1.0
 - reason: one short sentence

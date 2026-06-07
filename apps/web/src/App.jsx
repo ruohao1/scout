@@ -15,6 +15,7 @@ import { CandidateView } from './features/candidate/CandidateView.jsx'
 import { ChatView } from './features/chat/ChatView.jsx'
 import { JobsView } from './features/jobs/JobsView.jsx'
 import { MatchesView } from './features/matches/MatchesView.jsx'
+import { SettingsView } from './features/settings/SettingsView.jsx'
 import { TargetProfilesView } from './features/target-profiles/TargetProfilesView.jsx'
 import { PlaceholderView } from './features/workspace/PlaceholderView.jsx'
 import { ACTIVE_TARGET_PROFILE_ID_KEY, readStoredBoolean, readStoredJson, readStoredString, writeStoredJson, writeStoredString } from './lib/storage.js'
@@ -68,8 +69,8 @@ const placeholderViews = {
   jobs: {
     eyebrow: 'Jobs',
     title: 'Imported jobs will live here.',
-    body: 'Use the mock provider import command to seed local postings, then ask Scout to search or rank them from the chat.',
-    actions: ['uv run python main.py jobs import-mock --fixture packages/services/fixtures/mock_jobs.json', 'uv run python main.py jobs import-mock --count 5 --index'],
+    body: 'Import live jobs through Scout chat, JobSpy, or Adzuna, then ask Scout to search or rank them.',
+    actions: ['Ask for latest jobs', 'Import Adzuna jobs'],
   },
   matches: {
     eyebrow: 'Matches',
@@ -450,6 +451,7 @@ function App() {
             )}
             {activeView === 'jobs' && <JobsView jobs={jobs} isLoading={isLoadingJobs} error={jobsError} onRefresh={loadJobs} />}
             {activeView === 'candidate' && <CandidateView />}
+            {activeView === 'settings' && <SettingsView />}
             {activeView === 'targetProfiles' && (
               <TargetProfilesView
                 targetProfiles={profiles}
@@ -463,7 +465,7 @@ function App() {
             {activeView === 'matches' && (
               <MatchesView selectedProfile={selectedProfile} matches={rankedMatches} isLoading={isLoadingMatches} error={matchesError} onRefresh={() => selectedProfileExists && loadMatches(selectedProfileId)} onOpenProfiles={() => changeView('targetProfiles')} />
             )}
-            {activeView !== 'chat' && activeView !== 'jobs' && activeView !== 'candidate' && activeView !== 'targetProfiles' && activeView !== 'matches' && <PlaceholderView view={placeholderViews[activeView]} />}
+            {activeView !== 'chat' && activeView !== 'jobs' && activeView !== 'candidate' && activeView !== 'targetProfiles' && activeView !== 'matches' && activeView !== 'settings' && <PlaceholderView view={placeholderViews[activeView]} />}
           </main>
         </SidebarInset>
       </SidebarProvider>

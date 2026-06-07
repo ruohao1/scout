@@ -204,7 +204,7 @@ Use `--profile-id` to migrate a specific legacy profile. The migration is idempo
 
 The LLM chooses workflow steps and writes the final response, but deterministic services own database reads, retrieval, and ranking scores.
 
-The graph can report corpus status and can import/index mock or Adzuna jobs after an explicit user confirmation. Adzuna imports require `ADZUNA_APP_ID` and `ADZUNA_APP_KEY`, index imported jobs by default, and record provider import runs.
+The graph can report corpus status and can import/index live JobSpy or Adzuna jobs after an explicit user confirmation. JobSpy imports index jobs by default, use the runtime JobSpy settings, and record provider import runs. Adzuna imports require `ADZUNA_APP_ID` and `ADZUNA_APP_KEY`, index imported jobs by default, and record provider import runs.
 
 ## Health
 
@@ -294,31 +294,23 @@ curl -X POST http://127.0.0.1:8000/jobs \
 
 Save the returned `id` as `JOB_ID`.
 
-## Import Mock Jobs
+## Live JobSpy Search
 
-Import and index fixture jobs with deterministic local/offline embeddings:
-
-```bash
-SCOUT_EMBEDDINGS=hash uv run python main.py jobs import-mock \
-  --fixture packages/services/fixtures/mock_jobs.json \
-  --count 10 \
-  --index
-```
-
-Import and index fixture jobs with the default Gemini embeddings:
+Ask Scout for latest, live, current, or fresh jobs to fetch with JobSpy, persist the imported jobs, index them, and record the import run. Runtime settings control the enabled JobSpy sites and default live fetch count:
 
 ```bash
-GEMINI_API_KEY=... uv run python main.py jobs import-mock \
-  --fixture packages/services/fixtures/mock_jobs.json \
-  --count 10 \
-  --index
+curl http://127.0.0.1:8000/settings/runtime
 ```
 
-Fixture imports skip duplicate job URLs, so re-running the command does not abort the whole import. Generated mock jobs do not need a fixture and use unique URLs:
+Update JobSpy settings through the web Settings page or the API:
 
 ```bash
-SCOUT_EMBEDDINGS=hash uv run python main.py jobs import-mock --count 10 --index
+curl -X PUT http://127.0.0.1:8000/settings/runtime \
+  -H 'Content-Type: application/json' \
+  -d '{"jobspy":{"sites":["indeed","linkedin","google"],"default_count":10}}'
 ```
+
+Supported sites are `indeed`, `linkedin`, `glassdoor`, `google`, `zip_recruiter`, `bayt`, `bdjobs`, and `naukri`. The default environment value is `SCOUT_JOBSPY_SITES=indeed,linkedin,glassdoor,google`; persisted settings override the environment default.
 
 ## Import Adzuna Jobs
 

@@ -7,6 +7,7 @@ from .provider_import_runs import ProviderImportRunRepository
 from .pgvector import PgVectorChunkStore
 from .schema import setup_database
 from .search import JobSearchRepository
+from .settings import AppSettingsRepository
 from .target_profiles import TargetProfileEvidenceRepository, TargetProfileRepository
 
 __all__ = [
@@ -14,6 +15,7 @@ __all__ = [
     "CandidateEvidenceChunkRepository",
     "CandidateEvidenceRepository",
     "CandidateRepository",
+    "AppSettingsRepository",
     "JobChunkRepository",
     "JobRepository",
     "JobSearchRepository",

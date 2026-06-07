@@ -377,6 +377,20 @@ export async function rankJobsForTargetProfile({ targetProfileId, filters, limit
   return response.json()
 }
 
+export async function getRuntimeSettings() {
+  const response = await fetch(`${API_BASE_URL}/settings/runtime`)
+
+  if (!response.ok) {
+    throw new Error(await errorMessage(response, `Settings request failed with HTTP ${response.status}`))
+  }
+
+  return response.json()
+}
+
+export async function updateRuntimeSettings(settings) {
+  return jsonRequest('/settings/runtime', 'PUT', settings, 'Settings update failed')
+}
+
 export { API_BASE_URL }
 
 async function errorMessage(response, fallback) {
