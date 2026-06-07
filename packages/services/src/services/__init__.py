@@ -3,6 +3,7 @@ from .chat_orchestrator import respond_to_chat_with_tools
 from .cv_parsing import EmptyCVError, InvalidCVFileError, UnsupportedCVFileError, extract_cv_text
 from .candidate_documents import upload_candidate_cv
 from .candidate_indexing import CandidateEvidenceNotFoundError, index_candidate_evidence, reindex_all_candidate_evidence
+from .candidate_migration import LegacyProfileNotFoundError, migrate_profiles_to_candidate
 from .job_explanations import ExplanationParseError, explain_ranked_jobs
 from .job_corpus import JobCorpusStatus, get_job_corpus_status
 from .job_indexing import JobNotFoundError, index_job
@@ -43,6 +44,7 @@ __all__ = [
     "JobImportResult",
     "JobSpyJobProviderAdapter",
     "JobSpyJobProviderClient",
+    "LegacyProfileNotFoundError",
     "JobNotFoundError",
     "MockJobProviderAdapter",
     "MockJobProviderClient",
@@ -63,6 +65,7 @@ __all__ = [
     "import_jobs",
     "index_candidate_evidence",
     "index_job",
+    "migrate_profiles_to_candidate",
     "rank_jobs_for_profile",
     "rank_jobs_for_target_profile",
     "respond_to_chat",

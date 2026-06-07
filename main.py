@@ -97,6 +97,16 @@ def build_parser() -> argparse.ArgumentParser:
     import_adzuna_parser.set_defaults(handler=import_adzuna_jobs)
     import_adzuna_parser.set_defaults(index=True)
 
+    candidate_parser = subparsers.add_parser("candidate", help="Manage candidate knowledge")
+    candidate_subparsers = candidate_parser.add_subparsers(dest="candidate_command")
+
+    migrate_profile_parser = candidate_subparsers.add_parser("migrate-profile", help="Migrate a legacy profile to candidate knowledge")
+    migrate_profile_parser.add_argument(
+        "--profile-id",
+        help="Legacy profile id to migrate; defaults to the newest profile",
+    )
+    migrate_profile_parser.set_defaults(handler=migrate_profile)
+
     auth_parser = subparsers.add_parser("auth", help="Manage provider authentication")
     auth_subparsers = auth_parser.add_subparsers(dest="auth_provider")
 
@@ -193,6 +203,28 @@ def import_adzuna_jobs(args: argparse.Namespace) -> int:
         print(f"Indexed {result.indexed} Adzuna jobs.")
     for job in result.created:
         print(job["id"])
+    return 0
+
+
+def migrate_profile(args: argparse.Namespace) -> int:
+    from services import LegacyProfileNotFoundError, migrate_profiles_to_candidate
+
+    try:
+        result = migrate_profiles_to_candidate(source_profile_id=args.profile_id)
+    except LegacyProfileNotFoundError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 1
+    except Exception as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 1
+
+    print(f"Candidate: {result['candidate_id']}")
+    if result["document_id"]:
+        print(f"Document: {result['document_id']}")
+    print(f"Evidence migrated: {result['evidence_count']}")
+    if result["target_profile_id"]:
+        print(f"Target profile: {result['target_profile_id']}")
+    print(f"Evidence indexed: {result['indexed_count']}")
     return 0
 
 
