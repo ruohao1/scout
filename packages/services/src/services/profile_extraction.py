@@ -40,6 +40,85 @@ def extract_profile_fields(
     return _parse_profile_fields(response.text)
 
 
+def profile_fields_to_candidate_evidence(
+    extracted: dict[str, Any],
+    *,
+    source_document_id: str | None = None,
+) -> list[dict[str, Any]]:
+    evidence: list[dict[str, Any]] = []
+
+    for item in extracted.get("experiences") or []:
+        if not isinstance(item, dict) or not item.get("title"):
+            continue
+        evidence.append(
+            {
+                "type": "experience",
+                "title": item["title"],
+                "organization": item.get("company"),
+                "location": item.get("location"),
+                "start_date": item.get("start_date"),
+                "end_date": item.get("end_date"),
+                "is_current": bool(item.get("is_current")),
+                "description": item.get("description"),
+                "skills": item.get("skills") or [],
+                "source_document_id": source_document_id,
+            }
+        )
+
+    for item in extracted.get("projects") or []:
+        if not isinstance(item, dict) or not item.get("name"):
+            continue
+        evidence.append(
+            {
+                "type": "project",
+                "title": item["name"],
+                "organization": None,
+                "url": item.get("url"),
+                "description": item.get("description"),
+                "skills": item.get("skills") or [],
+                "source_document_id": source_document_id,
+            }
+        )
+
+    for item in extracted.get("enriched_skills") or []:
+        if not isinstance(item, dict) or not item.get("name"):
+            continue
+        category = item.get("category")
+        proficiency = item.get("proficiency")
+        detail = ", ".join(value for value in [category, proficiency] if value)
+        evidence.append(
+            {
+                "type": "skill",
+                "title": item["name"],
+                "description": detail or None,
+                "metadata": {
+                    key: value
+                    for key, value in {"category": category, "proficiency": proficiency}.items()
+                    if value
+                },
+                "source_document_id": source_document_id,
+            }
+        )
+
+    for key, title in [
+        ("target_roles", "Target roles"),
+        ("target_locations", "Target locations"),
+        ("preferred_contract_types", "Preferred contract types"),
+    ]:
+        values = extracted.get(key) or []
+        if values:
+            evidence.append(
+                {
+                    "type": "document_note",
+                    "title": title,
+                    "description": ", ".join(values),
+                    "source_document_id": source_document_id,
+                }
+            )
+
+    return evidence
+
+
 def _profile_extraction_prompt(cv_text: str) -> str:
     cv_text = cv_text[:MAX_PROFILE_EXTRACTION_CHARS]
     return (
