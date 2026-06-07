@@ -31,7 +31,7 @@ def explain_ranked_jobs(
     profiles: ProfileRepository | None = None,
 ) -> list[ExplainedRankedJob]:
     profile_repository = profiles or ProfileRepository()
-    profile = profile_repository.get(profile_id)
+    profile = profile_repository.get_with_enrichment(profile_id)
     if profile is None:
         raise ProfileNotFoundError(f"Profile not found: {profile_id}")
 

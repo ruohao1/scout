@@ -31,7 +31,7 @@ def respond_to_chat(
     text = message.strip()
     if not text:
         return ChatResult(
-            message="Ask me for jobs by role, skill, location, or remote preference.",
+            message=empty_message(),
             tool="none",
             warnings=["Message must not be empty."],
         )
@@ -43,7 +43,7 @@ def respond_to_chat(
     if intent == "rank":
         if not profile_id:
             return ChatResult(
-                message="Select a profile before asking me to rank or match jobs for you.",
+                message=missing_profile_message(),
                 tool="rank_jobs_for_profile",
                 warnings=["profile_id is required for matching."],
             )
@@ -51,25 +51,25 @@ def respond_to_chat(
             ranked = rank_jobs_for_profile(profile_id, filters=merged_filters, limit=limit)
         except ProfileNotFoundError:
             return ChatResult(
-                message="I could not find that profile. Pick an existing profile and try again.",
+                message=profile_not_found_message(),
                 tool="rank_jobs_for_profile",
                 warnings=["Profile not found."],
             )
         except Exception as exc:
             return ChatResult(
-                message="The ranking tool is not ready. Check the database and embedding provider configuration.",
+                message=ranking_unavailable_message(),
                 tool="rank_jobs_for_profile",
                 warnings=[f"Ranking failed: {exc}"],
             )
         if not ranked:
             return ChatResult(
-                message="I did not find ranked matches for that profile yet. Try importing and indexing mock jobs first.",
+                message=no_ranked_jobs_message(),
                 tool="rank_jobs_for_profile",
                 ranked_jobs=[],
                 warnings=["No ranked jobs found."],
             )
         return ChatResult(
-            message=f"I ranked {len(ranked)} jobs for that profile.",
+            message=rank_success_message(len(ranked)),
             tool="rank_jobs_for_profile",
             ranked_jobs=[asdict(job) for job in ranked],
         )
@@ -82,25 +82,25 @@ def respond_to_chat(
         jobs = search_jobs(query, filters=merged_filters, limit=limit)
     except EmptySearchQueryError:
         return ChatResult(
-            message="Tell me what kind of job, skill, or location you want to search for.",
+            message=vague_search_message(),
             tool="search_jobs",
             warnings=["Search query must not be empty."],
         )
     except Exception as exc:
         return ChatResult(
-            message="The search tool is not ready. Check the database and embedding provider configuration.",
+            message=search_unavailable_message(),
             tool="search_jobs",
             warnings=[f"Search failed: {exc}"],
         )
     if not jobs:
         return ChatResult(
-            message="I did not find matching indexed jobs. Try importing mock jobs with indexing, then search again.",
+            message=no_search_results_message(),
             tool="search_jobs",
             jobs=[],
             warnings=["No jobs found."],
         )
     return ChatResult(
-        message=f"I found {len(jobs)} relevant job matches.",
+        message=search_success_message(len(jobs)),
         tool="search_jobs",
         jobs=[asdict(job) for job in jobs],
     )
@@ -119,7 +119,133 @@ def classify_chat_intent(text: str) -> str:
 
 
 def no_tool_message(intent: str) -> str:
-    return "AI chat is unavailable because OpenAI auth is not configured. Log in with `uv run python main.py auth openai login --no-browser`, then try again."
+    if intent == "help":
+        return help_message()
+    if intent == "vague_search":
+        return vague_search_message()
+    return auth_unavailable_message()
+
+
+def empty_message() -> str:
+    return """Tell me what you want to do with jobs.
+
+Try one of these:
+
+- **Search:** `Find remote backend jobs`
+- **Rank:** `Rank jobs for my profile`
+- **Profiles:** `List candidate profiles`
+- **Corpus:** `How many jobs are indexed?`
+""".strip()
+
+
+def help_message() -> str:
+    return """I can help with job search and matching.
+
+Useful prompts:
+
+- **Search jobs:** `Find remote backend jobs`
+- **Rank matches:** `Rank jobs for my profile`
+- **Profiles:** `List candidate profiles`
+- **Corpus:** `How many jobs are indexed?`
+""".strip()
+
+
+def auth_unavailable_message() -> str:
+    return """AI chat is not configured yet, but local job tools can still run for clear search or ranking requests.
+
+To enable fuller chat:
+
+- Run `uv run python main.py auth openai login --no-browser`
+- Then try your question again
+""".strip()
+
+
+def missing_profile_message() -> str:
+    return """Select a candidate profile before ranking jobs.
+
+Next steps:
+
+- Open **Profiles** and select or create a profile
+- Then ask: `Rank jobs for my profile`
+""".strip()
+
+
+def profile_not_found_message() -> str:
+    return """I could not find the selected profile.
+
+Try this:
+
+- Refresh **Profiles**
+- Select an existing profile
+- Run ranking again
+""".strip()
+
+
+def ranking_unavailable_message() -> str:
+    return """Ranking is not ready yet.
+
+Check these prerequisites:
+
+- Database is running
+- Jobs are imported and indexed
+- Embedding provider configuration matches the index
+""".strip()
+
+
+def no_ranked_jobs_message() -> str:
+    return """I did not find ranked matches for that profile.
+
+Next step:
+
+- Import and index jobs, then rerun ranking
+""".strip()
+
+
+def rank_success_message(count: int) -> str:
+    return f"""Ranked **{count} jobs** against your selected profile.
+
+The strongest matches are shown below with skill overlap, location fit, and evidence where available.
+""".strip()
+
+
+def vague_search_message() -> str:
+    return """Tell me what kind of role to search for.
+
+Examples:
+
+- `Find Python developer jobs in London`
+- `Show remote backend roles`
+- `Search senior product manager jobs in Berlin`
+""".strip()
+
+
+def search_unavailable_message() -> str:
+    return """Search is not ready yet.
+
+Check these prerequisites:
+
+- Database is running
+- Jobs are imported
+- Jobs are indexed with the configured embedding provider
+""".strip()
+
+
+def no_search_results_message() -> str:
+    return """I did not find matching indexed jobs.
+
+Try one of these:
+
+- Broaden the role or skill keywords
+- Remove location or contract filters
+- Import and index more jobs
+""".strip()
+
+
+def search_success_message(count: int) -> str:
+    return f"""Found **{count} matching jobs**.
+
+The strongest matches are shown below. You can narrow the search with a location, contract type, seniority, or company.
+""".strip()
 
 
 def _is_match_intent(text: str) -> bool:

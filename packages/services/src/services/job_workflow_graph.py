@@ -151,9 +151,10 @@ def build_job_workflow_graph(*, provider: ChatPlanningProvider | None = None):
         _emit({"type": "tool_started", "id": "get_job_corpus_status", "tool": "get_job_corpus_status", "args": {}})
         status = state.get("corpus_status") or {}
         message = (
-            f"Scout has {status.get('total_jobs', 0)} jobs, "
-            f"{status.get('indexed_jobs', 0)} indexed jobs, and "
-            f"{status.get('unindexed_jobs', 0)} unindexed jobs."
+            "Here is the current job corpus status.\n\n"
+            f"- **Total jobs:** {status.get('total_jobs', 0)}\n"
+            f"- **Indexed jobs:** {status.get('indexed_jobs', 0)}\n"
+            f"- **Unindexed jobs:** {status.get('unindexed_jobs', 0)}"
         )
         warnings = [str(status["error"])] if status.get("error") else []
         _emit({"type": "tool_completed", "id": "get_job_corpus_status", "summary": "Read corpus status"})
@@ -164,9 +165,11 @@ def build_job_workflow_graph(*, provider: ChatPlanningProvider | None = None):
         _emit({"type": "step_started", "id": "confirm_import", "title": "Request import confirmation"})
         status = state.get("corpus_status") or {}
         message = (
-            "I can import and index 10 mock jobs so Scout has a searchable local corpus. "
-            f"Current corpus: {status.get('total_jobs', 0)} jobs, {status.get('indexed_jobs', 0)} indexed. "
-            "Reply yes to proceed."
+            "I can import and index **10 mock jobs** for local testing.\n\n"
+            "Current corpus:\n\n"
+            f"- **Total jobs:** {status.get('total_jobs', 0)}\n"
+            f"- **Indexed jobs:** {status.get('indexed_jobs', 0)}\n\n"
+            "Reply **yes** to proceed."
         )
         _emit({"type": "step_completed", "id": "confirm_import", "summary": "Waiting for user confirmation"})
         return {
@@ -194,14 +197,26 @@ def build_job_workflow_graph(*, provider: ChatPlanningProvider | None = None):
             _emit({"type": "step_failed", "id": "import_mock_jobs", "summary": "Mock import failed"})
             return {
                 "result": {
-                    "message": "I could not import and index mock jobs. Check the database and embedding provider configuration.",
+                    "message": (
+                        "I could not import and index mock jobs.\n\n"
+                        "Check these items:\n\n"
+                        "- Database is running\n"
+                        "- Job schema has been set up\n"
+                        "- Embedding provider is configured"
+                    ),
                     "tool": "import_mock_jobs",
                     "jobs": [],
                     "ranked_jobs": [],
                     "warnings": [str(exc)],
                 }
             }
-        message = f"Imported {len(result.created)} mock jobs, skipped {result.skipped} duplicates, and indexed {result.indexed} jobs."
+        message = (
+            "Mock jobs are ready.\n\n"
+            f"- **Imported:** {len(result.created)}\n"
+            f"- **Skipped duplicates:** {result.skipped}\n"
+            f"- **Indexed:** {result.indexed}\n\n"
+            "You can now ask Scout to search or rank these jobs."
+        )
         _emit({"type": "tool_completed", "id": "import_mock_jobs", "summary": message})
         _emit({"type": "step_completed", "id": "import_mock_jobs", "summary": message})
         return {"result": {"message": message, "tool": "import_mock_jobs", "jobs": [], "ranked_jobs": [], "warnings": []}}
@@ -211,10 +226,11 @@ def build_job_workflow_graph(*, provider: ChatPlanningProvider | None = None):
         params = _adzuna_import_params_from_state(state)
         query = _format_adzuna_query(params)
         message = (
-            f'I can fetch up to {params["count"]} fresh jobs from Adzuna for {query} and index them. '
-            f'Current corpus: {(state.get("corpus_status") or {}).get("total_jobs", 0)} jobs, '
-            f'{(state.get("corpus_status") or {}).get("indexed_jobs", 0)} indexed. '
-            "Reply yes to proceed. "
+            f"I can fetch and index up to **{params['count']} fresh Adzuna jobs** for {query}.\n\n"
+            "Current corpus:\n\n"
+            f"- **Total jobs:** {(state.get('corpus_status') or {}).get('total_jobs', 0)}\n"
+            f"- **Indexed jobs:** {(state.get('corpus_status') or {}).get('indexed_jobs', 0)}\n\n"
+            "Reply **yes** to proceed.\n\n"
             f'Confirmation details: confirm_import_adzuna_jobs country={params["country"]}; '
             f'what={params.get("what") or ""}; where={params.get("where") or ""}; count={params["count"]}.'
         )
@@ -252,7 +268,13 @@ def build_job_workflow_graph(*, provider: ChatPlanningProvider | None = None):
             _emit({"type": "step_failed", "id": "import_adzuna_jobs", "summary": "Adzuna import failed"})
             return {
                 "result": {
-                    "message": "I could not import and index Adzuna jobs. Check Adzuna credentials, the database, and embedding provider configuration.",
+                    "message": (
+                        "I could not import and index Adzuna jobs.\n\n"
+                        "Check these items:\n\n"
+                        "- `ADZUNA_APP_ID` and `ADZUNA_APP_KEY` are set\n"
+                        "- Database is running\n"
+                        "- Embedding provider is configured"
+                    ),
                     "tool": "import_adzuna_jobs",
                     "jobs": [],
                     "ranked_jobs": [],
@@ -269,7 +291,13 @@ def build_job_workflow_graph(*, provider: ChatPlanningProvider | None = None):
             status="completed",
             error=None,
         )
-        message = f"Imported {len(result.created)} Adzuna jobs, skipped {result.skipped} duplicates, and indexed {result.indexed} jobs."
+        message = (
+            "Adzuna import is complete.\n\n"
+            f"- **Imported:** {len(result.created)}\n"
+            f"- **Skipped duplicates:** {result.skipped}\n"
+            f"- **Indexed:** {result.indexed}\n\n"
+            "You can now search or rank these fresh jobs."
+        )
         _emit({"type": "tool_completed", "id": "import_adzuna_jobs", "summary": message})
         _emit({"type": "step_completed", "id": "import_adzuna_jobs", "summary": message})
         return {"result": {"message": message, "tool": "import_adzuna_jobs", "jobs": [], "ranked_jobs": [], "warnings": []}}
