@@ -21,6 +21,7 @@ dist/
 .env.*
 
 # Tool caches
+docs/superpowers/
 .pytest_cache/
 .ruff_cache/
 .mypy_cache/
