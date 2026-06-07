@@ -278,6 +278,7 @@ def _fetch_live_jobs(
         return {"ok": False, "warnings": ["Live JobSpy search needs a role, skill, or target profile search term."]}
 
     count = max(10, min(25, limit * 3))
+    country_indeed = _jobspy_country(filters.location)
     params = {
         "search_term": search_term,
         "location": filters.location,
@@ -286,7 +287,7 @@ def _fetch_live_jobs(
         "hours_old": None,
         "is_remote": filters.remote_policy == "remote" if filters.remote_policy else None,
         "job_type": _jobspy_job_type(filters.contract_type),
-        "country_indeed": "UK",
+        "country_indeed": country_indeed,
         "limit": limit,
     }
     _emit({"type": "tool_started", "id": "fetch_jobspy_jobs", "tool": "fetch_jobspy_jobs", "args": {key: value for key, value in params.items() if value is not None}})
@@ -300,7 +301,7 @@ def _fetch_live_jobs(
                 job_type=params["job_type"],
                 is_remote=params["is_remote"],
                 hours_old=params["hours_old"],
-                country_indeed=params["country_indeed"],
+                country_indeed=country_indeed,
             ),
             adapter=JobSpyJobProviderAdapter(),
             count=count,
@@ -556,6 +557,16 @@ def _jobspy_job_type(contract_type: str | None) -> str | None:
     return None
 
 
+def _jobspy_country(location: str | None) -> str:
+    if not location:
+        return "UK"
+    normalized = _normalized_text(location)
+    for city, country in _JOBSPY_COUNTRY_BY_LOCATION.items():
+        if city in normalized:
+            return country
+    return "UK"
+
+
 def _record_jobspy_run(
     runs: ProviderImportRunRepository,
     *,
@@ -594,6 +605,13 @@ def _has_unwanted_support_context(*, title: str, content: str, terms: set[str]) 
 
 _GENERIC_RELEVANCE_TERMS = {"developer", "engineer", "engineering", "software", "role", "roles"}
 _SUPPORT_CONTEXT_TERMS = {"support engineer", "customer support", "technical support", "training", "trainer", "learning and development", "l&d"}
+_JOBSPY_COUNTRY_BY_LOCATION = {
+    "amsterdam": "Netherlands",
+    "berlin": "Germany",
+    "london": "UK",
+    "lyon": "France",
+    "paris": "France",
+}
 
 
 def _emit(event: dict[str, Any]) -> None:

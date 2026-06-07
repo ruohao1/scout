@@ -367,12 +367,13 @@ def build_job_workflow_graph(*, provider: ChatPlanningProvider | None = None):
 
     def job_search_agent_node(state: JobWorkflowState) -> dict[str, Any]:
         route = state.get("route") or {}
+        filters = _merge_job_search_filters(state.get("filters") or {}, route.get("filters"))
         result = respond_to_job_search_agent(
             message=state.get("message", ""),
             history=state.get("history") or [],
             target_profile_id=state.get("target_profile_id"),
             profile_id=state.get("profile_id"),
-            filters=JobSearchFilters(**(state.get("filters") or {})),
+            filters=filters,
             limit=int(state.get("limit") or 5),
             route_query=route.get("query") if isinstance(route.get("query"), str) else None,
             route_intent=route.get("intent") if isinstance(route.get("intent"), str) else None,
@@ -431,6 +432,21 @@ def _string_list(value: object) -> list[str]:
     if not isinstance(value, list):
         return []
     return [item for item in value if isinstance(item, str)]
+
+
+def _merge_job_search_filters(state_filters: dict[str, Any], route_filters: object) -> JobSearchFilters:
+    route_values = route_filters if isinstance(route_filters, dict) else {}
+    return JobSearchFilters(
+        location=_string_filter(state_filters.get("location")) or _string_filter(route_values.get("location")),
+        contract_type=_string_filter(state_filters.get("contract_type")) or _string_filter(route_values.get("contract_type")),
+        company=_string_filter(state_filters.get("company")) or _string_filter(route_values.get("company")),
+        seniority=_string_filter(state_filters.get("seniority")) or _string_filter(route_values.get("seniority")),
+        remote_policy=_string_filter(state_filters.get("remote_policy")) or _string_filter(route_values.get("remote_policy")),
+    )
+
+
+def _string_filter(value: object) -> str | None:
+    return value.strip() if isinstance(value, str) and value.strip() else None
 
 
 def _emit(event: dict[str, Any]) -> None:
