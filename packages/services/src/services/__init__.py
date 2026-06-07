@@ -21,6 +21,14 @@ from .job_search import EmptySearchQueryError, search_jobs
 from .job_skills import enrich_job_skills, extract_job_skills
 from .job_workflow_graph import respond_to_chat_with_graph
 from .profile_extraction import ProfileExtractionError, extract_profile_fields
+from .target_profiles import (
+    TargetProfileSuggestionError,
+    TargetProfileSuggestionProvider,
+    create_target_profile,
+    get_target_profile_with_evidence,
+    suggest_target_profiles,
+    update_target_profile,
+)
 
 __all__ = [
     "AdzunaJobProviderAdapter",
@@ -40,12 +48,16 @@ __all__ = [
     "MockJobProviderClient",
     "ProfileNotFoundError",
     "ProfileExtractionError",
+    "TargetProfileSuggestionError",
+    "TargetProfileSuggestionProvider",
     "UnsupportedCVFileError",
+    "create_target_profile",
     "explain_ranked_jobs",
     "extract_cv_text",
     "extract_job_skills",
     "extract_profile_fields",
     "get_job_corpus_status",
+    "get_target_profile_with_evidence",
     "enrich_job_skills",
     "import_jobs",
     "index_candidate_evidence",
@@ -56,5 +68,7 @@ __all__ = [
     "respond_to_chat_with_tools",
     "reindex_all_candidate_evidence",
     "search_jobs",
+    "suggest_target_profiles",
+    "update_target_profile",
     "upload_candidate_cv",
 ]
