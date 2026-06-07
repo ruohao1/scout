@@ -1,7 +1,7 @@
 import { BanknoteIcon, BriefcaseBusinessIcon, Building2Icon, MapPinIcon } from 'lucide-react'
 import { Link } from 'react-router-dom'
 
-export function JobCard({ job, ranked, selected = false }) {
+export function JobCard({ job, ranked, selected = false, toBase = '/jobs' }) {
   const jobId = job.id || job.job_id
   const score = ranked ? job.final_score : job.score
   const detail = job.salary || job.contract_type
@@ -24,7 +24,7 @@ export function JobCard({ job, ranked, selected = false }) {
   }
 
   return (
-    <Link className="job-card" data-selected={selected} to={`/jobs/${jobId}`} state={{ job }} aria-current={selected ? 'true' : undefined}>
+    <Link className="job-card" data-selected={selected} to={`${toBase}/${jobId}`} state={{ job }} aria-current={selected ? 'true' : undefined}>
       {card}
     </Link>
   )

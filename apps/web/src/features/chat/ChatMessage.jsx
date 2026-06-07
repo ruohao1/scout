@@ -25,7 +25,7 @@ export function ChatMessage({ message }) {
       {results.length > 0 && (
         <div className="result-grid">
           {results.map((job) => (
-            <JobCard key={`${job.job_id}-${job.chunk_id || 'ranked'}`} job={job} ranked={Boolean(message.rankedJobs?.length)} />
+            <JobCard key={`${job.job_id}-${job.chunk_id || 'ranked'}`} job={job} ranked={Boolean(message.rankedJobs?.length)} toBase="/chat/jobs" />
           ))}
         </div>
       )}

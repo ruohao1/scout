@@ -103,7 +103,9 @@ function App() {
   const location = useLocation()
   const navigate = useNavigate()
   const selectedJobId = selectedJobIdFromPath(location.pathname)
-  const activeView = selectedJobId ? 'jobs' : viewByRoute[location.pathname] || 'chat'
+  const selectedChatJobId = selectedChatJobIdFromPath(location.pathname)
+  const selectedDetailJobId = selectedJobId || selectedChatJobId
+  const activeView = selectedChatJobId ? 'chat' : selectedJobId ? 'jobs' : viewByRoute[location.pathname] || 'chat'
   const [threads, setThreads] = useState(() => {
     const stored = readStoredJson(STORAGE_KEYS.threads, initialThreads)
     return validStoredThreads(stored) ? stored : initialThreads
@@ -165,10 +167,16 @@ function App() {
       navigate('/candidate', { replace: true })
       return
     }
-    if (!viewByRoute[location.pathname] && !selectedJobIdFromPath(location.pathname)) {
+    if (!viewByRoute[location.pathname] && !selectedJobIdFromPath(location.pathname) && !selectedChatJobIdFromPath(location.pathname)) {
       navigate('/chat', { replace: true })
     }
   }, [location.pathname, navigate])
+
+  useEffect(() => {
+    if (selectedChatJobId) {
+      setIsContextPanelOpen(false)
+    }
+  }, [selectedChatJobId])
 
   useEffect(() => {
     if (activeView === 'jobs' && !hasLoadedJobs && !isLoadingJobs) {
@@ -177,14 +185,14 @@ function App() {
   }, [activeView, hasLoadedJobs, isLoadingJobs])
 
   useEffect(() => {
-    if (!selectedJobId) {
+    if (!selectedDetailJobId) {
       setSelectedJob(null)
       setSelectedJobError('')
       return
     }
 
-    const routeStateJob = location.state?.job && (location.state.job.id === selectedJobId || location.state.job.job_id === selectedJobId) ? location.state.job : null
-    const listedJob = jobs.find((job) => job.id === selectedJobId)
+    const routeStateJob = location.state?.job && (location.state.job.id === selectedDetailJobId || location.state.job.job_id === selectedDetailJobId) ? location.state.job : null
+    const listedJob = jobs.find((job) => job.id === selectedDetailJobId)
     if (listedJob) {
       setSelectedJob(routeStateJob ? { ...listedJob, ...routeStateJob } : listedJob)
       setSelectedJobError('')
@@ -195,8 +203,8 @@ function App() {
       setSelectedJob(routeStateJob)
     }
 
-    loadSelectedJob(selectedJobId, routeStateJob)
-  }, [selectedJobId, jobs, location.state])
+    loadSelectedJob(selectedDetailJobId, routeStateJob)
+  }, [selectedDetailJobId, jobs, location.state])
 
   useEffect(() => {
     if ((activeView === 'targetProfiles' || activeView === 'matches' || activeView === 'chat') && !hasLoadedProfiles && !isLoadingProfiles) {
@@ -398,7 +406,7 @@ function App() {
     }
   }
 
-  async function loadSelectedJob(jobId = selectedJobId, contextJob = null) {
+  async function loadSelectedJob(jobId = selectedDetailJobId, contextJob = null) {
     if (!jobId) return
     setIsLoadingSelectedJob(true)
     setSelectedJobError('')
@@ -483,7 +491,27 @@ function App() {
         />
         <SidebarInset className="chat-root">
           <main className={activeView === 'chat' ? 'chat-page' : 'workspace-page'}>
-            {activeView === 'chat' && <ChatView messages={messages} draft={draft} isSending={isSending} selectedProfile={selectedProfile} onDraftChange={setDraft} onSubmit={submitMessage} />}
+            {activeView === 'chat' && (
+              <ChatView
+                messages={messages}
+                draft={draft}
+                isSending={isSending}
+                selectedProfile={selectedProfile}
+                selectedJobId={selectedChatJobId}
+                selectedJob={selectedJob}
+                isJobPaneOpen={Boolean(selectedChatJobId && !isContextPanelOpen)}
+                isLoadingSelectedJob={isLoadingSelectedJob}
+                selectedJobError={selectedJobError}
+                onDraftChange={setDraft}
+                onSubmit={submitMessage}
+                onShowJobPane={() => setIsContextPanelOpen(false)}
+                onCloseJobPane={() => {
+                  navigate('/chat')
+                  setIsContextPanelOpen(false)
+                }}
+                onRefreshSelectedJob={() => loadSelectedJob(selectedChatJobId)}
+              />
+            )}
             {(activeView === 'chat' || (activeView === 'jobs' && selectedJobId) || activeView === 'targetProfiles' || activeView === 'matches') && (
               <button
                 className="chat-context-toggle"
@@ -521,6 +549,11 @@ function App() {
 
 function selectedJobIdFromPath(pathname) {
   const match = pathname.match(/^\/jobs\/([^/]+)$/)
+  return match ? decodeURIComponent(match[1]) : null
+}
+
+function selectedChatJobIdFromPath(pathname) {
+  const match = pathname.match(/^\/chat\/jobs\/([^/]+)$/)
   return match ? decodeURIComponent(match[1]) : null
 }
 
