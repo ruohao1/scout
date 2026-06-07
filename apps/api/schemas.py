@@ -6,6 +6,17 @@ from uuid import UUID
 
 from pydantic import BaseModel, Field, field_validator
 
+EvidenceType = Literal[
+    "experience",
+    "project",
+    "skill",
+    "education",
+    "certification",
+    "language",
+    "interest",
+    "document_note",
+]
+
 
 class JobCreate(BaseModel):
     title: str
@@ -206,6 +217,88 @@ class ProfileEnrichmentRead(BaseModel):
     experiences: list[ProfileExperienceRead]
     projects: list[ProfileProjectRead]
     enriched_skills: list[ProfileSkillRead]
+
+
+class CandidateRead(BaseModel):
+    id: UUID
+    display_name: str | None = None
+    headline: str | None = None
+    summary: str | None = None
+    created_at: datetime
+    updated_at: datetime
+
+
+class CandidateUpdate(BaseModel):
+    display_name: str | None = None
+    headline: str | None = None
+    summary: str | None = None
+
+
+class CandidateDocumentRead(BaseModel):
+    id: UUID
+    filename: str | None = None
+    content_type: str | None = None
+    text: str
+    source: str
+    created_at: datetime
+    updated_at: datetime
+
+
+class CandidateEvidenceCreate(BaseModel):
+    type: EvidenceType
+    title: str = Field(min_length=1)
+    organization: str | None = None
+    location: str | None = None
+    start_date: str | None = None
+    end_date: str | None = None
+    is_current: bool = False
+    description: str | None = None
+    skills: list[str] = Field(default_factory=list)
+    url: str | None = None
+    metadata: dict[str, Any] = Field(default_factory=dict)
+    source_document_id: UUID | None = None
+    confidence: float = Field(default=1.0, ge=0.0, le=1.0)
+
+
+class CandidateEvidenceRead(CandidateEvidenceCreate):
+    id: UUID
+    created_at: datetime
+    updated_at: datetime
+
+
+class CandidateEvidenceReindexRead(BaseModel):
+    indexed: int
+
+
+class TargetProfileEvidenceLink(BaseModel):
+    evidence_id: UUID
+    weight: float = Field(default=1.0, ge=0.0, le=1.0)
+    note: str | None = None
+
+
+class TargetProfileCreate(BaseModel):
+    name: str = Field(min_length=1)
+    summary: str | None = None
+    target_roles: list[str] = Field(default_factory=list)
+    target_locations: list[str] = Field(default_factory=list)
+    preferred_contract_types: list[str] = Field(default_factory=list)
+    seniority: str | None = None
+    remote_preference: str | None = None
+    must_have_keywords: list[str] = Field(default_factory=list)
+    nice_to_have_keywords: list[str] = Field(default_factory=list)
+    avoid_keywords: list[str] = Field(default_factory=list)
+    instructions: str | None = None
+    evidence: list[TargetProfileEvidenceLink] = Field(default_factory=list)
+
+
+class TargetProfileRead(TargetProfileCreate):
+    id: UUID
+    created_at: datetime
+    updated_at: datetime
+
+
+class TargetProfileSuggestionRequest(BaseModel):
+    count: int = Field(default=3, ge=1, le=5)
 
 
 class SearchFilters(BaseModel):

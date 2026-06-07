@@ -3,6 +3,7 @@ from __future__ import annotations
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from .routes.candidate import router as candidate_router
 from .routes.chat import router as chat_router
 from .routes.explanations import router as explanations_router
 from .routes.health import router as health_router
@@ -11,6 +12,7 @@ from .routes.profiles import router as profiles_router
 from .routes.providers import router as providers_router
 from .routes.ranking import router as ranking_router
 from .routes.search import router as search_router
+from .routes.target_profiles import router as target_profiles_router
 
 
 def create_app() -> FastAPI:
@@ -22,6 +24,7 @@ def create_app() -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+    app.include_router(candidate_router)
     app.include_router(chat_router)
     app.include_router(explanations_router)
     app.include_router(health_router)
@@ -30,6 +33,7 @@ def create_app() -> FastAPI:
     app.include_router(providers_router)
     app.include_router(ranking_router)
     app.include_router(search_router)
+    app.include_router(target_profiles_router)
     return app
 
 
