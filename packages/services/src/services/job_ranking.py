@@ -21,14 +21,18 @@ def rank_jobs_for_target_profile(
     *,
     filters: JobSearchFilters | None = None,
     limit: int = 10,
+    user_query: str | None = None,
 ) -> list[RankedJob]:
     target_profile = get_target_profile_with_evidence(target_profile_id)
     if target_profile is None:
         raise TargetProfileNotFoundError(f"Target profile not found: {target_profile_id}")
 
-    query = _target_profile_query(target_profile)
+    query = _combined_target_profile_query(target_profile, user_query=user_query)
     results = search_jobs(query, filters=filters, limit=max(limit * 5, 20))
-    return rank_search_results(profile=target_profile, results=results)[:limit]
+    ranking_profile = dict(target_profile)
+    if filters and filters.seniority:
+        ranking_profile["_requested_seniority"] = filters.seniority
+    return rank_search_results(profile=ranking_profile, results=results)[:limit]
 
 
 def rank_jobs_for_profile(
@@ -71,6 +75,13 @@ def _target_profile_query(target_profile: dict) -> str:
         weight = _weight(evidence.get("weight"))
         repeat = 3 if weight >= 0.75 else 2 if weight >= 0.5 else 1
         parts.extend([evidence_text] * repeat)
+    return " ".join(part for part in parts if part).strip()
+
+
+def _combined_target_profile_query(target_profile: dict, *, user_query: str | None) -> str:
+    parts = [_target_profile_query(target_profile)]
+    if isinstance(user_query, str) and user_query.strip():
+        parts.extend([user_query.strip()] * 3)
     return " ".join(part for part in parts if part).strip()
 
 

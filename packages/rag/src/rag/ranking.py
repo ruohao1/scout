@@ -34,6 +34,7 @@ def _rank_job(*, profile: dict[str, Any], results: list[JobSearchResult], now: d
     selected_evidence_score, background_evidence_score, matched_evidence = _evidence_scores(profile, best)
     keyword_score = _keyword_score(profile, best)
     penalty_score = _penalty_score(profile, best)
+    seniority_penalty = _seniority_penalty(profile, best)
     final_score = _clamp01(
         0.35 * vector_score
         + 0.20 * skill_overlap_score
@@ -44,6 +45,7 @@ def _rank_job(*, profile: dict[str, Any], results: list[JobSearchResult], now: d
         + 0.03 * background_evidence_score
         + 0.07 * keyword_score
         - 0.15 * penalty_score
+        - 0.20 * seniority_penalty
     )
 
     return RankedJob(
@@ -141,6 +143,15 @@ def _penalty_score(profile: dict[str, Any], result: JobSearchResult) -> float:
     text = _job_text(result)
     matched = sum(1 for keyword in avoid_keywords if _normalize(keyword) in text)
     return _clamp01(matched / len(avoid_keywords))
+
+
+def _seniority_penalty(profile: dict[str, Any], result: JobSearchResult) -> float:
+    requested = _normalize(profile.get("_requested_seniority") or "")
+    if requested not in {"intern", "internship", "junior", "entry-level", "entry level", "student"}:
+        return 0.0
+    text = _job_text(result)
+    senior_terms = {"senior", "staff", "principal", "lead", "head of", "director", "manager"}
+    return 1.0 if any(term in text for term in senior_terms) else 0.0
 
 
 def _location_score(profile: dict[str, Any], result: JobSearchResult) -> float:

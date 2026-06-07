@@ -167,7 +167,7 @@ class JobSpyJobProviderClient:
         job_type: str | None = None,
         is_remote: bool | None = None,
         hours_old: int | None = None,
-        country_indeed: str = "UK",
+        country_indeed: str | None = "UK",
         verbose: int = 0,
     ) -> None:
         self.site_name = site_name or list(DEFAULT_JOBSPY_SITES)
@@ -195,10 +195,11 @@ class JobSpyJobProviderClient:
             "site_name": self.site_name,
             "search_term": self.search_term,
             "results_wanted": count,
-            "country_indeed": self.country_indeed,
             "description_format": "markdown",
             "verbose": self.verbose,
         }
+        if self.country_indeed:
+            params["country_indeed"] = self.country_indeed
         if self.location:
             params["location"] = self.location
         if self.distance is not None:

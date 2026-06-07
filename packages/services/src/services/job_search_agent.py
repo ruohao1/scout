@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import asdict
+from dataclasses import asdict, dataclass
 import re
 from typing import Any, Callable
 
@@ -25,6 +25,19 @@ from .target_profiles import get_target_profile_with_evidence
 JobSpyImporter = Callable[..., JobImportResult]
 
 
+@dataclass(frozen=True)
+class JobFindRequest:
+    query: str
+    role_query: str | None
+    location: str | None
+    seniority: str | None
+    wants_profile_match: bool
+    wants_live: bool
+    wants_ranking: bool
+    limit: int
+    filters: JobSearchFilters
+
+
 def respond_to_job_search_agent(
     *,
     message: str,
@@ -42,76 +55,71 @@ def respond_to_job_search_agent(
     if not text:
         return ChatResult(message=vague_search_message(), tool="job_search_agent", warnings=["Message must not be empty."])
 
-    search_text = route_query.strip() if isinstance(route_query, str) and route_query.strip() else _effective_search_text(text, history or [])
-    active_limit = _requested_limit(text, fallback=limit)
-    active_filters = _merge_filters(search_text, filters or JobSearchFilters())
+    request = _parse_job_find_request(
+        text=text,
+        history=history or [],
+        route_query=route_query,
+        route_intent=route_intent,
+        route_wants_live=route_wants_live,
+        filters=filters or JobSearchFilters(),
+        fallback_limit=limit,
+    )
     selected_target_profile_id = target_profile_id or profile_id
-    intent = classify_chat_intent(search_text)
-    if route_intent and "rank" in route_intent:
-        intent = "rank"
-    elif route_intent and "search" in route_intent:
-        intent = "search"
-    if _looks_like_profile_match(search_text):
-        intent = "rank"
-    if intent == "chat" and _looks_like_job_search(search_text):
-        intent = "search"
-    wants_ranking = intent == "rank"
-    wants_live = route_wants_live if route_wants_live is not None else _wants_live_jobs(text) or _wants_live_jobs(search_text)
 
-    if intent == "vague_search":
+    if not request.wants_ranking and classify_chat_intent(request.query) == "vague_search":
         return ChatResult(message=vague_search_message(), tool="job_search_agent", warnings=["Search request needs role, skill, location, or target profile detail."])
-    if wants_ranking and not selected_target_profile_id:
+    if request.wants_ranking and not selected_target_profile_id:
         return ChatResult(message=missing_target_profile_message(), tool="job_search_agent", warnings=["target_profile_id is required for matching."])
 
     _emit({"type": "step_started", "id": "job_search_agent", "title": "Run job-search specialist"})
     local = _run_local_search(
-        text=search_text,
-        wants_ranking=wants_ranking,
+        text=request.query,
+        wants_ranking=request.wants_ranking,
         target_profile_id=selected_target_profile_id,
-        filters=active_filters,
-        limit=active_limit,
+        filters=request.filters,
+        limit=request.limit,
     )
     local_count = len(local.get("ranked_jobs") or local.get("jobs") or [])
     if _target_profile_missing(local):
         _emit({"type": "step_completed", "id": "job_search_agent", "summary": "Target profile not found"})
         return ChatResult(message=target_profile_not_found_message(), tool="job_search_agent", warnings=local.get("warnings", []))
-    should_fetch_live = wants_live or (intent == "rank" and not _has_enough_results(local_count, active_limit))
+    should_fetch_live = request.wants_live or (request.wants_ranking and not _has_good_enough_results(local, request.limit))
 
     if not should_fetch_live:
         _emit({"type": "step_completed", "id": "job_search_agent", "summary": f"Found {local_count} local results"})
-        return _chat_result_from_local(local, fetched_live=False)
+        return _chat_result_from_local(local, fetched_live=False, search_text=request.query, filters=request.filters)
 
     live_result = _fetch_live_jobs(
-        text=search_text,
+        text=request.query,
         target_profile_id=selected_target_profile_id,
-        filters=active_filters,
-        limit=active_limit,
+        filters=request.filters,
+        limit=request.limit,
         importer=jobspy_importer,
     )
     warnings = [*local.get("warnings", []), *live_result.get("warnings", [])]
     if live_result.get("ok"):
         refreshed = _run_local_search(
-            text=search_text,
-            wants_ranking=wants_ranking,
+            text=request.query,
+            wants_ranking=request.wants_ranking,
             target_profile_id=selected_target_profile_id,
-            filters=active_filters,
-            limit=active_limit,
+            filters=request.filters,
+            limit=request.limit,
         )
         warnings.extend(refreshed.get("warnings", []))
         fetched = int(live_result.get("created") or 0)
         indexed = int(live_result.get("indexed") or 0)
         count = len(refreshed.get("ranked_jobs") or refreshed.get("jobs") or [])
         _emit({"type": "step_completed", "id": "job_search_agent", "summary": f"Fetched {fetched} live jobs and returned {count} results"})
-        return _chat_result_from_local(refreshed, fetched_live=True, created=fetched, indexed=indexed, warnings=warnings)
+        return _chat_result_from_local(refreshed, fetched_live=True, created=fetched, indexed=indexed, warnings=warnings, search_text=request.query, filters=request.filters)
 
     if local_count:
         warnings.append("Live JobSpy search failed; showing indexed local results instead.")
         _emit({"type": "step_completed", "id": "job_search_agent", "summary": "Live fetch failed; returned local results"})
-        return _chat_result_from_local(local, fetched_live=False, warnings=warnings)
+        return _chat_result_from_local(local, fetched_live=False, warnings=warnings, search_text=request.query, filters=request.filters)
 
     _emit({"type": "step_completed", "id": "job_search_agent", "summary": "No local or live results"})
     return ChatResult(
-        message="I could not find enough relevant jobs locally, and the live JobSpy search failed.",
+        message=_empty_search_message(request.query, fetched_live=True, filters=request.filters, warnings=warnings),
         tool="job_search_agent",
         warnings=warnings or ["No jobs found."],
     )
@@ -128,11 +136,52 @@ def is_job_search_agent_request(message: str, history: list[dict[str, Any]] | No
     return _wants_live_jobs(message) and any(word in normalized.split() for word in ("job", "jobs", "role", "roles", "offer", "offers"))
 
 
+def _parse_job_find_request(
+    *,
+    text: str,
+    history: list[dict[str, Any]],
+    route_query: str | None,
+    route_intent: str | None,
+    route_wants_live: bool | None,
+    filters: JobSearchFilters,
+    fallback_limit: int,
+) -> JobFindRequest:
+    effective_text = _effective_search_text(text, history)
+    query = route_query.strip() if isinstance(route_query, str) and route_query.strip() and not _is_generic_job_query(route_query) else effective_text
+    merged_filters = _merge_filters(query, _merge_filters(effective_text, filters))
+    seniority = merged_filters.seniority or _first_seniority(query)
+    wants_ranking = bool(route_intent and "rank" in route_intent) or _looks_like_profile_match(query)
+    if not wants_ranking and classify_chat_intent(query) == "rank":
+        wants_ranking = True
+    role_query = _role_search_query(query)
+    return JobFindRequest(
+        query=query,
+        role_query=role_query,
+        location=merged_filters.location,
+        seniority=seniority,
+        wants_profile_match=wants_ranking,
+        wants_live=route_wants_live if route_wants_live is not None else _wants_live_jobs(text) or _wants_live_jobs(query),
+        wants_ranking=wants_ranking,
+        limit=_requested_limit(text, fallback=fallback_limit),
+        filters=JobSearchFilters(
+            location=merged_filters.location,
+            contract_type=merged_filters.contract_type,
+            company=merged_filters.company,
+            seniority=seniority,
+            remote_policy=merged_filters.remote_policy,
+        ),
+    )
+
+
 def _looks_like_job_search(text: str) -> bool:
     words = set(_normalized_text(text).split())
     has_search_action = bool(words & {"find", "get", "list", "search", "show"})
     has_role_terms = bool(words & {"backend", "developer", "engineer", "frontend", "manager", "product", "python", "software"})
     return has_search_action and has_role_terms
+
+
+def _is_generic_job_query(value: str) -> bool:
+    return _normalized_text(value) in {"job", "jobs", "role", "roles", "offer", "offers", "opportunity", "opportunities"}
 
 
 def _looks_like_profile_match(text: str) -> bool:
@@ -238,7 +287,7 @@ def _run_local_search(
                     "args": {"target_profile_id": target_profile_id, "filters": asdict(filters), "limit": limit},
                 }
             )
-            ranked = rank_jobs_for_target_profile(target_profile_id, filters=filters, limit=limit)
+            ranked = rank_jobs_for_target_profile(target_profile_id, filters=filters, limit=limit, user_query=text)
             ranked_jobs = _relevant_ranked_jobs([asdict(job) for job in ranked], limit=limit)
             _emit({"type": "tool_completed", "id": "rank_jobs_for_profile", "summary": f"Ranked {len(ranked_jobs)} jobs"})
             _emit({"type": "step_completed", "id": "search_local_jobs", "summary": f"Ranked {len(ranked)} indexed jobs"})
@@ -332,35 +381,137 @@ def _chat_result_from_local(
     created: int = 0,
     indexed: int = 0,
     warnings: list[str] | None = None,
+    search_text: str = "",
+    filters: JobSearchFilters | None = None,
 ) -> ChatResult:
     jobs = local.get("jobs") or []
     ranked_jobs = local.get("ranked_jobs") or []
     result_warnings = warnings if warnings is not None else local.get("warnings", [])
     count = len(ranked_jobs or jobs)
     if ranked_jobs:
-        message = f"Ranked **{count} {_plural(count, 'job')}** against your selected target profile."
+        location_phrase = f" in {filters.location}" if filters and filters.location else ""
+        message = f"I found **{count} {_plural(count, 'role')}{location_phrase}** that best match your selected profile."
+        if _ranked_results_are_weak(ranked_jobs):
+            message += " These are the closest local matches I found, but some may be broader than your request."
     elif jobs:
         message = f"Found **{count} matching {_plural(count, 'job')}**."
     else:
-        message = "I did not find enough relevant jobs."
+        message = _empty_search_message(search_text, fetched_live=fetched_live, filters=filters, warnings=result_warnings)
 
-    if fetched_live:
+    if count and fetched_live:
         if created:
             message += f" I also fetched **{created} live {_plural(created, 'job')}** with JobSpy and indexed **{indexed}** before refreshing results."
         else:
             message += " I also checked JobSpy for live offers, but it did not return new relevant jobs to index."
-    elif result_warnings and not count:
-        message += " I checked the local corpus first, but it did not have enough relevant indexed jobs."
 
     return ChatResult(message=message, tool=str(local.get("tool") or "job_search_agent"), jobs=jobs, ranked_jobs=ranked_jobs, warnings=result_warnings)
+
+
+def _empty_search_message(
+    search_text: str,
+    *,
+    fetched_live: bool,
+    filters: JobSearchFilters | None,
+    warnings: list[str] | None,
+) -> str:
+    no_indexed_jobs = any("No indexed jobs" in warning for warning in warnings or [])
+    query = _suggestion_query(search_text)
+    location = filters.location if filters else _suggestion_location(search_text)
+
+    if no_indexed_jobs:
+        message = "I do not have indexed jobs to search yet."
+        suggestions = [
+            f"Ask for live jobs: `search latest {query}`",
+            "Import provider jobs, then refresh the Jobs page.",
+            "Check `/settings` if the enabled JobSpy sites are too narrow.",
+        ]
+    else:
+        message = "I did not find enough relevant jobs for this search."
+        suggestions = []
+        if not fetched_live:
+            suggestions.append(f"Try live search: `search latest {query}`")
+        if location:
+            broader_location = _broader_location(location)
+            if broader_location:
+                suggestions.append(f"Broaden the location: `{_without_location(query)} in {broader_location}` or `{_without_location(query)} remote`")
+            else:
+                suggestions.append(f"Broaden the location: `{_without_location(query)} remote` or try a nearby region")
+        else:
+            suggestions.append(f"Add a broader location: `{query} remote`")
+        suggestions.extend(
+            [
+                f"Use related titles: `{_related_role_query(query)}`",
+                "Open `/settings` and enable more JobSpy sites if live search is too narrow.",
+            ]
+        )
+        if fetched_live:
+            message += " I also checked JobSpy live offers, but the refreshed results were still too narrow."
+
+    return message + "\n\nTry one of these next:\n\n" + "\n".join(f"- {suggestion}" for suggestion in suggestions)
+
+
+def _suggestion_query(text: str) -> str:
+    query = _search_query(text)
+    query = re.sub(r"\b(for|me|please|the|to)\b", " ", query, flags=re.IGNORECASE)
+    query = re.sub(r"\s+", " ", query).strip()
+    return query or "jobs"
+
+
+def _suggestion_location(text: str) -> str | None:
+    match = re.search(r"\b(?:in|near|around)\s+([A-Za-z][A-Za-z\s-]{1,40})\b", text, flags=re.IGNORECASE)
+    if not match:
+        return None
+    location = re.sub(r"\b(?:jobs?|roles?|offers?|opportunities)\b.*$", "", match.group(1), flags=re.IGNORECASE).strip()
+    return location.title() if location else None
+
+
+def _without_location(query: str) -> str:
+    without_location = re.sub(r"\b(?:in|near|around)\s+[A-Za-z][A-Za-z\s-]{1,40}$", "", query, flags=re.IGNORECASE).strip()
+    without_location = re.sub(r"\s+", " ", without_location).strip()
+    return without_location or query
+
+
+def _related_role_query(query: str) -> str:
+    if re.search(r"\bengineer\b", query, flags=re.IGNORECASE):
+        return re.sub(r"\bengineer\b", "developer", query, count=1, flags=re.IGNORECASE)
+    if re.search(r"\bdeveloper\b", query, flags=re.IGNORECASE):
+        return re.sub(r"\bdeveloper\b", "engineer", query, count=1, flags=re.IGNORECASE)
+    return f"{query} software developer"
+
+
+def _broader_location(location: str) -> str | None:
+    country = _jobspy_country(location)
+    if country:
+        return "Europe" if country == "UK" else country
+    return None
 
 
 def _plural(count: int, singular: str) -> str:
     return singular if count == 1 else f"{singular}s"
 
 
-def _has_enough_results(count: int, limit: int) -> bool:
-    return count >= min(max(limit, 1), 3)
+def _has_good_enough_results(local: dict[str, Any], limit: int) -> bool:
+    results = local.get("ranked_jobs") or local.get("jobs") or []
+    if len(results) < min(max(limit, 1), 3):
+        return False
+    ranked_jobs = local.get("ranked_jobs") or []
+    if not ranked_jobs:
+        return True
+    return not _ranked_results_are_weak(ranked_jobs)
+
+
+def _ranked_results_are_weak(ranked_jobs: list[dict[str, Any]]) -> bool:
+    if not ranked_jobs:
+        return True
+    best_score = max(_float_value(job.get("final_score")) for job in ranked_jobs)
+    return best_score < 0.35
+
+
+def _float_value(value: object) -> float:
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return 0.0
 
 
 def _relevant_search_jobs(jobs: list[dict[str, Any]], *, text: str, limit: int) -> list[dict[str, Any]]:
@@ -459,7 +610,7 @@ def _relevance_terms_ordered(text: str) -> list[str]:
         "the",
         "to",
     }
-    locations = {"amsterdam", "berlin", "london", "lyon", "paris"}
+    locations = _COUNTRY_ALIASES.keys()
     terms: list[str] = []
     seen: set[str] = set()
     for token in _normalized_text(_search_query(text)).split():
@@ -518,10 +669,7 @@ def _merge_filters(text: str, filters: JobSearchFilters) -> JobSearchFilters:
 
 
 def _first_location(text: str) -> str | None:
-    for location in ("paris", "lyon", "berlin", "amsterdam", "london"):
-        if location in text:
-            return location.title()
-    return None
+    return _suggestion_location(text)
 
 
 def _first_contract_type(text: str) -> str | None:
@@ -533,6 +681,10 @@ def _first_contract_type(text: str) -> str | None:
 
 
 def _first_seniority(text: str) -> str | None:
+    if "intern" in text or "internship" in text:
+        return "internship"
+    if "junior" in text or "entry level" in text or "entry-level" in text or "graduate" in text:
+        return "junior"
     if "senior" in text:
         return "senior"
     if "lead" in text:
@@ -565,14 +717,14 @@ def _jobspy_job_type(contract_type: str | None) -> str | None:
     return None
 
 
-def _jobspy_country(location: str | None) -> str:
+def _jobspy_country(location: str | None) -> str | None:
     if not location:
-        return "UK"
+        return None
     normalized = _normalized_text(location)
-    for city, country in _JOBSPY_COUNTRY_BY_LOCATION.items():
-        if city in normalized:
+    for alias, country in _COUNTRY_ALIASES.items():
+        if re.search(rf"\b{re.escape(alias)}\b", normalized):
             return country
-    return "UK"
+    return None
 
 
 def _record_jobspy_run(
@@ -613,12 +765,13 @@ def _has_unwanted_support_context(*, title: str, content: str, terms: set[str]) 
 
 _GENERIC_RELEVANCE_TERMS = {"developer", "engineer", "engineering", "software", "role", "roles"}
 _SUPPORT_CONTEXT_TERMS = {"support engineer", "customer support", "technical support", "training", "trainer", "learning and development", "l&d"}
-_JOBSPY_COUNTRY_BY_LOCATION = {
-    "amsterdam": "Netherlands",
-    "berlin": "Germany",
-    "london": "UK",
-    "lyon": "France",
-    "paris": "France",
+_COUNTRY_ALIASES = {
+    "canada": "Canada",
+    "france": "France",
+    "germany": "Germany",
+    "netherlands": "Netherlands",
+    "uk": "UK",
+    "united kingdom": "UK",
 }
 
 
