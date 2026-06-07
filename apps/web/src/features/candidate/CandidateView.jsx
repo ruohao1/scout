@@ -246,30 +246,38 @@ function EvidenceSection({ type, label, items, onAdd, onEdit }) {
   return (
     <section className="candidate-evidence-section">
       <div className="candidate-section-heading">
-        <div><p>{type.replace('_', ' ')}</p><h2>{label}</h2></div>
+        <h2>{label}</h2>
         <div><span>{items.length}</span><button type="button" onClick={onAdd}>Add</button></div>
       </div>
       {items.length === 0 ? (
         <p className="candidate-empty-section">No {label.toLowerCase()} evidence in this view.</p>
       ) : (
-        <div className="candidate-evidence-grid">
-          {items.map((item) => <EvidenceCard item={item} key={item.id} onEdit={() => onEdit(item)} />)}
+        <div className="candidate-evidence-list">
+          {items.map((item) => <EvidenceRow item={item} key={item.id} onEdit={() => onEdit(item)} />)}
         </div>
       )}
     </section>
   )
 }
 
-function EvidenceCard({ item, onEdit }) {
+function EvidenceRow({ item, onEdit }) {
+  const meta = [item.organization, item.location, dateRange(item)].filter(Boolean).join(' / ') || 'Candidate evidence'
+
   return (
-    <article className="candidate-evidence-card" data-review={isReviewCandidate(item)}>
+    <article className="candidate-evidence-row" data-review={isReviewCandidate(item)}>
       <button type="button" onClick={onEdit}>
-        <div className="candidate-card-topline"><span>{item.type.replace('_', ' ')}</span>{isReviewCandidate(item) && <strong>Review</strong>}</div>
-        <h3>{item.title}</h3>
-        <p>{[item.organization, item.location, dateRange(item)].filter(Boolean).join(' / ') || 'Candidate evidence'}</p>
-        {item.description && <blockquote>{item.description}</blockquote>}
-        {item.skills?.length > 0 && <div className="candidate-tag-row">{item.skills.slice(0, 8).map((skill) => <span key={skill}>{skill}</span>)}</div>}
-        <small>{item.source_document_id ? 'Source-backed' : 'Manual or unsourced'} · confidence {Number(item.confidence ?? 1).toFixed(1)}</small>
+        <div className="candidate-row-main">
+          <h3>{item.title}</h3>
+          <p>{meta}</p>
+          {item.description && <blockquote>{item.description}</blockquote>}
+          {item.skills?.length > 0 && <small className="candidate-skill-line">Skills: {item.skills.slice(0, 8).join(', ')}</small>}
+        </div>
+        <div className="candidate-row-meta">
+          {isReviewCandidate(item) && <strong>Needs review</strong>}
+          <small>{item.source_document_id ? 'Source-backed' : 'Manual or unsourced'}</small>
+          <small>Confidence {Number(item.confidence ?? 1).toFixed(1)}</small>
+          <span>Edit</span>
+        </div>
       </button>
     </article>
   )

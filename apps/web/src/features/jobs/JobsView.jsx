@@ -32,8 +32,8 @@ export function JobsView({ jobs, isLoading, error, onRefresh }) {
       {!isLoading && !error && jobs.length === 0 && (
         <div className="jobs-state">
           <strong>No jobs imported yet.</strong>
-          <span>Run a mock import, then press Refresh.</span>
-          <code>uv run python main.py jobs import-mock --fixture packages/services/fixtures/mock_jobs.json</code>
+          <span>Run an indexed mock import, then press Refresh.</span>
+          <code>SCOUT_EMBEDDINGS=hash uv run python main.py jobs import-mock --fixture packages/services/fixtures/mock_jobs.json --index</code>
         </div>
       )}
 

@@ -11,11 +11,11 @@ export function NavUser({ onProfileClick, isActive = false }) {
           asChild
           className="scout-profile-button md:h-8 md:p-0"
           isActive={isActive}
-          tooltip={{ children: "Profiles", hidden: false }}
+          tooltip={{ children: "Candidate", hidden: false }}
         >
-          <NavLink to="/profiles" onClick={onProfileClick}>
+          <NavLink to="/candidate" onClick={onProfileClick}>
             <UserRoundIcon />
-            <span>Profiles</span>
+            <span>Candidate</span>
           </NavLink>
         </SidebarMenuButton>
       </SidebarMenuItem>

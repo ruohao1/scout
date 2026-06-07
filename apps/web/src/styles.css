@@ -1141,8 +1141,7 @@ textarea {
 }
 
 .candidate-hero-panel,
-.candidate-alert,
-.candidate-evidence-section {
+.candidate-alert {
   border: 1px solid rgba(223, 231, 223, 0.9);
   border-radius: 1.75rem;
   background: rgba(255, 254, 251, 0.82);
@@ -1289,29 +1288,31 @@ textarea {
 
 .candidate-section-stack {
   display: grid;
-  gap: 18px;
+  border-top: 1px solid rgba(49, 83, 63, 0.18);
+  background: linear-gradient(180deg, rgba(255, 254, 251, 0.38), rgba(255, 254, 251, 0));
 }
 
 .candidate-evidence-section {
-  padding: clamp(18px, 3vw, 28px);
+  border-bottom: 1px solid rgba(49, 83, 63, 0.18);
+  padding: clamp(28px, 5vw, 48px) 0;
 }
 
 .candidate-section-heading {
   display: flex;
-  align-items: end;
+  align-items: baseline;
   justify-content: space-between;
   gap: 18px;
-  margin-bottom: 16px;
+  margin-bottom: 4px;
 }
 
 .candidate-section-heading h2,
 .candidate-editor-heading h2 {
   margin: 0;
   color: var(--foreground);
-  font-size: clamp(1.55rem, 3vw, 2.35rem);
+  font-size: clamp(1.65rem, 4vw, 3.2rem);
   font-weight: 1000;
-  letter-spacing: -0.06em;
-  line-height: 0.95;
+  letter-spacing: -0.075em;
+  line-height: 0.9;
 }
 
 .candidate-section-heading > div:last-child {
@@ -1321,14 +1322,20 @@ textarea {
 }
 
 .candidate-section-heading span {
-  display: grid;
-  min-width: 2.1rem;
-  height: 2.1rem;
-  place-items: center;
-  border-radius: 50%;
-  background: var(--green-soft);
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
   color: var(--green);
   font-weight: 1000;
+}
+
+.candidate-section-heading span::after {
+  content: "items";
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
 }
 
 .candidate-section-heading button {
@@ -1337,6 +1344,9 @@ textarea {
   color: var(--green);
   font-weight: 900;
   cursor: pointer;
+  text-decoration: underline;
+  text-decoration-color: rgba(49, 83, 63, 0.28);
+  text-underline-offset: 5px;
 }
 
 .candidate-empty-section {
@@ -1345,95 +1355,102 @@ textarea {
   font-size: 0.92rem;
 }
 
-.candidate-evidence-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-  gap: 12px;
+.candidate-evidence-list {
+  margin-top: 18px;
+  border-top: 1px solid rgba(49, 83, 63, 0.14);
 }
 
-.candidate-evidence-card button {
+.candidate-evidence-row button {
   display: grid;
-  gap: 10px;
+  grid-template-columns: minmax(0, 1fr) minmax(140px, 0.22fr);
+  gap: clamp(18px, 4vw, 42px);
   width: 100%;
-  min-height: 100%;
-  border: 1px solid rgba(223, 231, 223, 0.9);
-  border-radius: 1.25rem;
-  background: rgba(247, 242, 232, 0.45);
+  border: 0;
+  border-bottom: 1px solid rgba(49, 83, 63, 0.14);
+  background: transparent;
   color: inherit;
-  padding: 16px;
+  padding: 18px 0;
   text-align: left;
   cursor: pointer;
-  transition: border-color 180ms ease, background 180ms ease, transform 180ms ease;
+  transition: color 180ms ease, background 180ms ease, padding-inline 180ms ease;
 }
 
-.candidate-evidence-card button:hover {
-  border-color: rgba(49, 83, 63, 0.34);
-  background: rgba(238, 244, 239, 0.78);
-  transform: translateY(-2px);
+.candidate-evidence-row button:hover,
+.candidate-evidence-row button:focus-visible {
+  background: linear-gradient(90deg, rgba(49, 83, 63, 0.045), transparent 72%);
+  padding-inline: 12px 0;
+  outline: 0;
 }
 
-.candidate-evidence-card[data-review="true"] button {
-  border-color: rgba(138, 93, 47, 0.28);
-  background: rgba(255, 247, 236, 0.68);
+.candidate-evidence-row[data-review="true"] button {
+  box-shadow: inset 3px 0 0 rgba(138, 93, 47, 0.5);
+  padding-left: 14px;
 }
 
-.candidate-card-topline {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  color: var(--green);
-  font-size: 0.72rem;
-  font-weight: 1000;
-  letter-spacing: 0.12em;
+.candidate-row-main,
+.candidate-row-meta {
+  display: grid;
+  align-content: start;
+  gap: 8px;
+}
+
+.candidate-row-meta {
+  justify-items: end;
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 800;
+  text-align: right;
+}
+
+.candidate-row-meta strong {
+  color: var(--warning);
+  font-size: 0.74rem;
+  letter-spacing: 0.1em;
   text-transform: uppercase;
 }
 
-.candidate-card-topline strong {
-  border-radius: 999px;
-  background: var(--warning-bg);
-  color: var(--warning);
-  padding: 4px 7px;
-  letter-spacing: 0.08em;
+.candidate-row-meta span {
+  margin-top: 4px;
+  color: var(--green);
+  font-weight: 1000;
+  text-decoration: underline;
+  text-decoration-color: rgba(49, 83, 63, 0.28);
+  text-underline-offset: 5px;
+  opacity: 0;
+  transition: opacity 180ms ease;
 }
 
-.candidate-evidence-card h3 {
+.candidate-evidence-row button:hover .candidate-row-meta span,
+.candidate-evidence-row button:focus-visible .candidate-row-meta span {
+  opacity: 1;
+}
+
+.candidate-evidence-row h3 {
   margin: 0;
   color: var(--foreground);
-  font-size: 1.08rem;
+  font-size: clamp(1.02rem, 2vw, 1.34rem);
   font-weight: 1000;
-  letter-spacing: -0.04em;
+  letter-spacing: -0.045em;
 }
 
-.candidate-evidence-card p,
-.candidate-evidence-card blockquote,
-.candidate-evidence-card small {
+.candidate-evidence-row p,
+.candidate-evidence-row blockquote,
+.candidate-evidence-row small {
   margin: 0;
   color: var(--muted);
   font-size: 0.86rem;
   line-height: 1.55;
 }
 
-.candidate-evidence-card blockquote {
+.candidate-evidence-row blockquote {
   display: -webkit-box;
   overflow: hidden;
   -webkit-line-clamp: 4;
   -webkit-box-orient: vertical;
 }
 
-.candidate-tag-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-
-.candidate-tag-row span {
-  border: 1px solid rgba(223, 231, 223, 0.95);
-  border-radius: 999px;
-  background: rgba(255, 254, 251, 0.84);
+.candidate-skill-line {
   color: var(--green);
-  padding: 4px 7px;
-  font-size: 0.7rem;
   font-weight: 900;
 }
 
@@ -2490,6 +2507,25 @@ textarea {
 
   .target-evidence-row input[type="number"] {
     grid-column: 2;
+  }
+
+  .candidate-section-heading {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .candidate-evidence-row button {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  .candidate-row-meta {
+    justify-items: start;
+    text-align: left;
+  }
+
+  .candidate-row-meta span {
+    opacity: 1;
   }
 
   .profile-enrichment-actions {
