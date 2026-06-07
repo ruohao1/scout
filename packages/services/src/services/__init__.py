@@ -1,6 +1,7 @@
 from .chat import ChatResult, respond_to_chat
 from .chat_orchestrator import respond_to_chat_with_tools
 from .cv_parsing import EmptyCVError, InvalidCVFileError, UnsupportedCVFileError, extract_cv_text
+from .candidate_indexing import CandidateEvidenceNotFoundError, index_candidate_evidence, reindex_all_candidate_evidence
 from .job_explanations import ExplanationParseError, explain_ranked_jobs
 from .job_corpus import JobCorpusStatus, get_job_corpus_status
 from .job_indexing import JobNotFoundError, index_job
@@ -24,6 +25,7 @@ __all__ = [
     "AdzunaJobProviderAdapter",
     "AdzunaJobProviderClient",
     "ChatResult",
+    "CandidateEvidenceNotFoundError",
     "EmptyCVError",
     "EmptySearchQueryError",
     "ExplanationParseError",
@@ -45,10 +47,12 @@ __all__ = [
     "get_job_corpus_status",
     "enrich_job_skills",
     "import_jobs",
+    "index_candidate_evidence",
     "index_job",
     "rank_jobs_for_profile",
     "respond_to_chat",
     "respond_to_chat_with_graph",
     "respond_to_chat_with_tools",
+    "reindex_all_candidate_evidence",
     "search_jobs",
 ]
