@@ -7,21 +7,21 @@ export function MatchesView({ selectedProfile, matches, isLoading, error, onRefr
         <div>
           <p>Matches</p>
           <h1>Ranked fit</h1>
-          <span>{selectedProfile ? `Ranking imported jobs against ${profileName(selectedProfile)}.` : 'Select a candidate profile to rank imported jobs.'}</span>
+          <span>{selectedProfile ? `Ranking imported jobs against ${profileName(selectedProfile)}.` : 'Select a target profile to rank imported jobs.'}</span>
         </div>
         {selectedProfile ? (
           <button type="button" onClick={onRefresh} disabled={isLoading}>
             {isLoading ? 'Ranking...' : 'Rerank jobs'}
           </button>
         ) : (
-          <button type="button" onClick={onOpenProfiles}>Select profile</button>
+          <button type="button" onClick={onOpenProfiles}>Select target profile</button>
         )}
       </header>
 
       {!selectedProfile && (
         <div className="matches-state">
-          <strong>No profile selected.</strong>
-          <span>Create or select a profile before viewing ranked matches.</span>
+          <strong>No target profile selected.</strong>
+          <span>Create or select a target profile before viewing ranked matches.</span>
         </div>
       )}
 
@@ -35,7 +35,7 @@ export function MatchesView({ selectedProfile, matches, isLoading, error, onRefr
       {selectedProfile && isLoading && !matches.length && (
         <div className="matches-state">
           <strong>Ranking jobs...</strong>
-          <span>Scout is comparing job evidence against the selected profile.</span>
+          <span>Scout is comparing job evidence against the selected target profile.</span>
         </div>
       )}
 

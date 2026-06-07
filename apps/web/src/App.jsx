@@ -14,8 +14,10 @@ import {
   deleteProfileProject,
   deleteProfileSkill,
   getProfileEnrichment,
+  listTargetProfiles,
   listJobs,
   listProfiles,
+  rankJobsForTargetProfile,
   rankJobsForProfile,
   sendChatMessageStream,
   uploadProfile,
@@ -29,7 +31,7 @@ import { JobsView } from './features/jobs/JobsView.jsx'
 import { MatchesView } from './features/matches/MatchesView.jsx'
 import { ProfilesView } from './features/profiles/ProfilesView.jsx'
 import { PlaceholderView } from './features/workspace/PlaceholderView.jsx'
-import { readStoredBoolean, readStoredJson, readStoredString, writeStoredJson, writeStoredString } from './lib/storage.js'
+import { ACTIVE_TARGET_PROFILE_ID_KEY, readStoredBoolean, readStoredJson, readStoredString, writeStoredJson, writeStoredString } from './lib/storage.js'
 
 const initialMessages = [
   {
@@ -58,7 +60,7 @@ const initialThreads = [
 const STORAGE_KEYS = {
   threads: 'scout.threads',
   activeThreadId: 'scout.activeThreadId',
-  selectedProfileId: 'scout.selectedProfileId',
+  selectedProfileId: ACTIVE_TARGET_PROFILE_ID_KEY,
   contextPanelOpen: 'scout.contextPanelOpen',
 }
 
@@ -92,10 +94,10 @@ const placeholderViews = {
     actions: ['SCOUT_EMBEDDINGS=hash', 'VITE_API_BASE_URL=http://127.0.0.1:8000'],
   },
   profiles: {
-    eyebrow: 'Profiles',
-    title: 'Candidate profiles will anchor matching.',
-    body: 'The profile area will manage candidate context before Scout uses it to explain job fit.',
-    actions: ['Candidate profile', 'Structured context'],
+    eyebrow: 'Candidate',
+    title: 'Candidate knowledge anchors matching.',
+    body: 'The candidate workspace manages evidence and target profiles before Scout ranks jobs.',
+    actions: ['Candidate evidence', 'Target profiles'],
   },
 }
 
@@ -181,12 +183,6 @@ function App() {
   }, [activeView, hasLoadedProfiles, isLoadingProfiles])
 
   useEffect(() => {
-    if (activeView === 'profiles' && hasLoadedProfiles && selectedProfileExists && enrichmentProfileId !== selectedProfileId && !isLoadingEnrichment) {
-      loadProfileEnrichment(selectedProfileId)
-    }
-  }, [activeView, hasLoadedProfiles, selectedProfileExists, selectedProfileId, enrichmentProfileId, isLoadingEnrichment])
-
-  useEffect(() => {
     if (activeView === 'matches' && hasLoadedProfiles && !selectedProfileExists) {
       setRankedMatches([])
       setMatchesProfileId(null)
@@ -240,7 +236,7 @@ function App() {
         history: history
           .filter((message) => message.role === 'user' || message.role === 'assistant')
           .map((message) => ({ role: message.role, content: message.content })),
-        profile_id: selectedProfileId,
+        target_profile_id: selectedProfileId,
         filters: {
           location: null,
           contract_type: null,
@@ -384,7 +380,7 @@ function App() {
     setIsLoadingProfiles(true)
     setProfilesError('')
     try {
-      const loadedProfiles = await listProfiles({ limit: 50 })
+      const loadedProfiles = await listTargetProfiles({ limit: 50 })
       setProfiles(loadedProfiles)
       setSelectedProfileId((current) => {
         if (current && loadedProfiles.some((profile) => profile.id === current)) {
@@ -536,7 +532,7 @@ function App() {
     setIsLoadingMatches(true)
     setMatchesError('')
     try {
-      const ranked = await rankJobsForProfile({ profileId, limit: 10 })
+      const ranked = await rankJobsForTargetProfile({ targetProfileId: profileId, limit: 10 })
       setRankedMatches(ranked)
       setMatchesProfileId(profileId)
     } catch (error) {
@@ -593,24 +589,10 @@ function App() {
               <ProfilesView
                 profiles={profiles}
                 selectedProfileId={selectedProfileId}
-                isCreating={isCreatingProfile}
-                isAttachingCv={isAttachingProfileCv}
-                enrichment={profileEnrichment}
-                isLoadingEnrichment={isLoadingEnrichment}
-                isSavingEnrichment={isSavingEnrichment}
+                isCreating={isCreatingProfile || isLoadingProfiles}
                 error={profilesError}
-                onCreateProfile={submitProfile}
-                onUploadCvProfile={uploadCvProfile}
-                onAttachCv={attachCvToSelectedProfile}
-                onCreateExperience={submitProfileExperience}
-                onUpdateExperience={saveProfileExperience}
-                onDeleteExperience={removeProfileExperience}
-                onCreateProject={submitProfileProject}
-                onUpdateProject={saveProfileProject}
-                onDeleteProject={removeProfileProject}
-                onCreateSkill={submitProfileSkill}
-                onUpdateSkill={saveProfileSkill}
-                onDeleteSkill={removeProfileSkill}
+                onSelectProfile={setSelectedProfileId}
+                onProfilesRefresh={loadProfiles}
               />
             )}
             {activeView === 'matches' && (

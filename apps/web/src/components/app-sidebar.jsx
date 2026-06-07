@@ -324,15 +324,15 @@ function ProfilesPanel({ profiles, selectedProfileId, isLoading, onRefresh, onSe
       <SidebarHeader className="gap-3.5 border-b border-sidebar-border/70 p-4">
         <div className="flex w-full items-center justify-between gap-3">
           <div>
-            <div className="text-base font-medium text-foreground">Profiles</div>
-            <p className="text-xs text-muted-foreground">Saved candidate contexts</p>
+            <div className="text-base font-medium text-foreground">Target profiles</div>
+            <p className="text-xs text-muted-foreground">Matching personas</p>
           </div>
-          <button className="sidebar-action" type="button" onClick={onRefresh} disabled={isLoading} aria-label="Refresh profiles">
+          <button className="sidebar-action" type="button" onClick={onRefresh} disabled={isLoading} aria-label="Refresh target profiles">
             <RefreshCwIcon className={isLoading ? "size-4 animate-spin" : "size-4"} />
           </button>
         </div>
         <div className="flex items-center justify-between text-xs text-muted-foreground">
-          <span>{isLoading ? "Refreshing..." : "Saved profiles"}</span>
+          <span>{isLoading ? "Refreshing..." : "Saved target profiles"}</span>
           <span>{profiles.length}</span>
         </div>
       </SidebarHeader>
@@ -341,7 +341,7 @@ function ProfilesPanel({ profiles, selectedProfileId, isLoading, onRefresh, onSe
           <SidebarGroupContent>
             {!isLoading && profiles.length === 0 && (
               <div className="px-3 py-3 text-sm text-muted-foreground">
-                No saved profiles yet. Open Profiles to create or upload one.
+                No target profiles yet. Open Candidate to create one.
               </div>
             )}
             {profiles.map((profile) => {
@@ -376,7 +376,7 @@ function ProfilesPanel({ profiles, selectedProfileId, isLoading, onRefresh, onSe
 function profileSubtitle(profile, title) {
   const roles = profile.target_roles || []
   const subtitleRoles = roles[0] === title ? roles.slice(1) : roles
-  return subtitleRoles.join(', ') || profile.seniority || 'General candidate'
+  return subtitleRoles.join(', ') || profile.seniority || 'General target'
 }
 
 function ThreadActionsDropdown({ thread, onRename, onDuplicate, onDelete }) {
