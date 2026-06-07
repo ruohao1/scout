@@ -14,7 +14,7 @@ export function MatchesView({ selectedProfile, matches, isLoading, error, onRefr
             {isLoading ? 'Ranking...' : 'Rerank jobs'}
           </button>
         ) : (
-          <button type="button" onClick={onOpenProfiles}>Select target profile</button>
+          <button type="button" onClick={onOpenProfiles}>Open target profiles</button>
         )}
       </header>
 

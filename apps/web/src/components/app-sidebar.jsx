@@ -59,6 +59,8 @@ import { profileName } from "../lib/profile.js"
 const navItems = [
   { id: "chat", title: "Chat", path: "/chat", icon: <BotIcon /> },
   { id: "jobs", title: "Jobs", path: "/jobs", icon: <BriefcaseBusinessIcon /> },
+  { id: "candidate", title: "Candidate", path: "/candidate", icon: <UserRoundIcon /> },
+  { id: "targetProfiles", title: "Target Profiles", path: "/target-profiles", icon: <TargetIcon /> },
   { id: "matches", title: "Matches", path: "/matches", icon: <TargetIcon /> },
   { id: "settings", title: "Settings", path: "/settings", icon: <Settings2Icon /> },
 ]
@@ -84,7 +86,7 @@ export function AppSidebar({
   const [renamingThreadId, setRenamingThreadId] = useState(null)
   const [renameDraft, setRenameDraft] = useState("")
   const [deleteTarget, setDeleteTarget] = useState(null)
-  const showContextPanel = (activeView === "chat" || activeView === "profiles") && open
+  const showContextPanel = (activeView === "chat" || activeView === "targetProfiles" || activeView === "matches") && open
 
   function startRename(thread) {
     setRenamingThreadId(thread.id)
@@ -156,7 +158,7 @@ export function AppSidebar({
           </SidebarGroup>
         </SidebarContent>
         <SidebarFooter className="mt-auto">
-          <NavUser onProfileClick={() => onViewChange("profiles")} isActive={activeView === "profiles"} />
+          <NavUser onProfileClick={() => onViewChange("candidate")} isActive={activeView === "candidate"} />
         </SidebarFooter>
       </Sidebar>
 
@@ -341,7 +343,7 @@ function ProfilesPanel({ profiles, selectedProfileId, isLoading, onRefresh, onSe
           <SidebarGroupContent>
             {!isLoading && profiles.length === 0 && (
               <div className="px-3 py-3 text-sm text-muted-foreground">
-                No target profiles yet. Open Candidate to create one.
+                No target profiles yet. Open Target Profiles to create one.
               </div>
             )}
             {profiles.map((profile) => {

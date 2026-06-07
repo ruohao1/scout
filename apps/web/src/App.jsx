@@ -68,11 +68,15 @@ const routeByView = {
   chat: '/chat',
   jobs: '/jobs',
   matches: '/matches',
-  profiles: '/profiles',
+  candidate: '/candidate',
+  targetProfiles: '/target-profiles',
   settings: '/settings',
 }
 
-const viewByRoute = Object.fromEntries(Object.entries(routeByView).map(([view, route]) => [route, view]))
+const viewByRoute = {
+  ...Object.fromEntries(Object.entries(routeByView).map(([view, route]) => [route, view])),
+  '/profiles': 'candidate',
+}
 
 const placeholderViews = {
   jobs: {
@@ -93,11 +97,17 @@ const placeholderViews = {
     body: 'Keep hash embeddings for offline development, or point the API at Gemini/OpenAI once credentials and indexes are ready.',
     actions: ['SCOUT_EMBEDDINGS=hash', 'VITE_API_BASE_URL=http://127.0.0.1:8000'],
   },
-  profiles: {
+  candidate: {
     eyebrow: 'Candidate',
     title: 'Candidate knowledge anchors matching.',
     body: 'The candidate workspace manages evidence and target profiles before Scout ranks jobs.',
     actions: ['Candidate evidence', 'Target profiles'],
+  },
+  targetProfiles: {
+    eyebrow: 'Target Profiles',
+    title: 'Personas shape matching.',
+    body: 'Target profiles select candidate evidence, weights, and keywords for each job-search direction.',
+    actions: ['Evidence weights', 'Search personas'],
   },
 }
 
@@ -165,6 +175,10 @@ function App() {
       navigate('/chat', { replace: true })
       return
     }
+    if (location.pathname === '/profiles') {
+      navigate('/candidate', { replace: true })
+      return
+    }
     if (!viewByRoute[location.pathname]) {
       navigate('/chat', { replace: true })
     }
@@ -177,7 +191,7 @@ function App() {
   }, [activeView, hasLoadedJobs, isLoadingJobs])
 
   useEffect(() => {
-    if ((activeView === 'profiles' || activeView === 'matches') && !hasLoadedProfiles && !isLoadingProfiles) {
+    if ((activeView === 'targetProfiles' || activeView === 'matches' || activeView === 'chat') && !hasLoadedProfiles && !isLoadingProfiles) {
       loadProfiles()
     }
   }, [activeView, hasLoadedProfiles, isLoadingProfiles])
@@ -358,7 +372,7 @@ function App() {
 
   function changeView(view) {
     navigate(routeByView[view] || '/chat')
-    setIsContextPanelOpen(view === 'chat')
+    setIsContextPanelOpen(view === 'chat' || view === 'targetProfiles' || view === 'matches')
   }
 
   async function loadJobs() {
@@ -547,7 +561,7 @@ function App() {
   return (
     <TooltipProvider>
       <SidebarProvider
-        open={(activeView === 'chat' || activeView === 'profiles') && isContextPanelOpen}
+        open={(activeView === 'chat' || activeView === 'targetProfiles' || activeView === 'matches') && isContextPanelOpen}
         onOpenChange={setIsContextPanelOpen}
         style={{
           '--sidebar-width': '22rem',
@@ -573,7 +587,7 @@ function App() {
         <SidebarInset className="chat-root">
           <main className={activeView === 'chat' ? 'chat-page' : 'workspace-page'}>
             {activeView === 'chat' && <ChatView messages={messages} draft={draft} isSending={isSending} selectedProfile={selectedProfile} onDraftChange={setDraft} onSubmit={submitMessage} />}
-            {(activeView === 'chat' || activeView === 'profiles') && (
+            {(activeView === 'chat' || activeView === 'targetProfiles' || activeView === 'matches') && (
               <button
                 className="chat-context-toggle"
                 type="button"
@@ -585,7 +599,7 @@ function App() {
               </button>
             )}
             {activeView === 'jobs' && <JobsView jobs={jobs} isLoading={isLoadingJobs} error={jobsError} onRefresh={loadJobs} />}
-            {activeView === 'profiles' && (
+            {activeView === 'candidate' && (
               <ProfilesView
                 profiles={profiles}
                 selectedProfileId={selectedProfileId}
@@ -596,9 +610,9 @@ function App() {
               />
             )}
             {activeView === 'matches' && (
-              <MatchesView selectedProfile={selectedProfile} matches={rankedMatches} isLoading={isLoadingMatches} error={matchesError} onRefresh={() => selectedProfileExists && loadMatches(selectedProfileId)} onOpenProfiles={() => changeView('profiles')} />
+              <MatchesView selectedProfile={selectedProfile} matches={rankedMatches} isLoading={isLoadingMatches} error={matchesError} onRefresh={() => selectedProfileExists && loadMatches(selectedProfileId)} onOpenProfiles={() => changeView('targetProfiles')} />
             )}
-            {activeView !== 'chat' && activeView !== 'jobs' && activeView !== 'profiles' && activeView !== 'matches' && <PlaceholderView view={placeholderViews[activeView]} />}
+            {activeView !== 'chat' && activeView !== 'jobs' && activeView !== 'candidate' && activeView !== 'matches' && <PlaceholderView view={placeholderViews[activeView]} />}
           </main>
         </SidebarInset>
       </SidebarProvider>
@@ -607,8 +621,8 @@ function App() {
 }
 
 function contextPanelToggleLabel(activeView, isOpen) {
-  if (activeView === 'profiles') {
-    return isOpen ? 'Hide profile list' : 'Show profile list'
+  if (activeView === 'targetProfiles' || activeView === 'matches') {
+    return isOpen ? 'Hide target profile list' : 'Show target profile list'
   }
   return isOpen ? 'Hide conversation list' : 'Show conversation list'
 }
