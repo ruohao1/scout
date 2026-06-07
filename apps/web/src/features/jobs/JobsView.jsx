@@ -1,6 +1,21 @@
 import { JobCard } from './JobCard.jsx'
+import { JobDetailPane } from './JobDetailPane.jsx'
 
-export function JobsView({ jobs, isLoading, error, onRefresh }) {
+export function JobsView({ jobs, selectedJob, selectedJobId, isLoading, isLoadingSelectedJob, error, selectedJobError, onRefresh, onRefreshSelectedJob }) {
+  if (selectedJobId) {
+    return (
+      <section className="jobs-view jobs-view-detail" aria-label="Selected job">
+        {error && (
+          <div className="jobs-state warning-state" role="alert">
+            <strong>Could not load jobs.</strong>
+            <span>{error}</span>
+          </div>
+        )}
+        <JobDetailPane job={selectedJob} isLoading={isLoadingSelectedJob} error={selectedJobError} onRefresh={onRefreshSelectedJob} />
+      </section>
+    )
+  }
+
   return (
     <section className="jobs-view" aria-label="Imported jobs">
       <header className="jobs-header">
@@ -29,7 +44,7 @@ export function JobsView({ jobs, isLoading, error, onRefresh }) {
         </div>
       )}
 
-      {!isLoading && !error && jobs.length === 0 && (
+      {!isLoading && !error && jobs.length === 0 && !selectedJobId && (
         <div className="jobs-state">
           <strong>No jobs imported yet.</strong>
           <span>Ask Scout for current live jobs, or import indexed Adzuna jobs from the CLI.</span>
@@ -37,13 +52,14 @@ export function JobsView({ jobs, isLoading, error, onRefresh }) {
         </div>
       )}
 
-      {jobs.length > 0 && (
-        <div className="jobs-grid">
+      {!selectedJobId && jobs.length > 0 && (
+        <div className="jobs-grid" aria-label="Job results">
           {jobs.map((job) => (
             <JobCard key={job.id} job={job} ranked={false} />
           ))}
         </div>
       )}
+
     </section>
   )
 }

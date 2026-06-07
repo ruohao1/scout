@@ -5,6 +5,7 @@ import { TooltipProvider } from '@/components/ui/tooltip'
 import { PanelLeftCloseIcon, PanelLeftOpenIcon } from 'lucide-react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import {
+  getJob,
   listTargetProfiles,
   listJobs,
   rankJobsForTargetProfile,
@@ -101,7 +102,8 @@ const placeholderViews = {
 function App() {
   const location = useLocation()
   const navigate = useNavigate()
-  const activeView = viewByRoute[location.pathname] || 'chat'
+  const selectedJobId = selectedJobIdFromPath(location.pathname)
+  const activeView = selectedJobId ? 'jobs' : viewByRoute[location.pathname] || 'chat'
   const [threads, setThreads] = useState(() => {
     const stored = readStoredJson(STORAGE_KEYS.threads, initialThreads)
     return validStoredThreads(stored) ? stored : initialThreads
@@ -114,6 +116,9 @@ function App() {
   const [isLoadingJobs, setIsLoadingJobs] = useState(false)
   const [jobsError, setJobsError] = useState('')
   const [hasLoadedJobs, setHasLoadedJobs] = useState(false)
+  const [selectedJob, setSelectedJob] = useState(null)
+  const [isLoadingSelectedJob, setIsLoadingSelectedJob] = useState(false)
+  const [selectedJobError, setSelectedJobError] = useState('')
   const [profiles, setProfiles] = useState([])
   const [selectedProfileId, setSelectedProfileId] = useState(() => readStoredString(STORAGE_KEYS.selectedProfileId, null))
   const [isLoadingProfiles, setIsLoadingProfiles] = useState(false)
@@ -160,7 +165,7 @@ function App() {
       navigate('/candidate', { replace: true })
       return
     }
-    if (!viewByRoute[location.pathname]) {
+    if (!viewByRoute[location.pathname] && !selectedJobIdFromPath(location.pathname)) {
       navigate('/chat', { replace: true })
     }
   }, [location.pathname, navigate])
@@ -170,6 +175,28 @@ function App() {
       loadJobs()
     }
   }, [activeView, hasLoadedJobs, isLoadingJobs])
+
+  useEffect(() => {
+    if (!selectedJobId) {
+      setSelectedJob(null)
+      setSelectedJobError('')
+      return
+    }
+
+    const routeStateJob = location.state?.job && (location.state.job.id === selectedJobId || location.state.job.job_id === selectedJobId) ? location.state.job : null
+    const listedJob = jobs.find((job) => job.id === selectedJobId)
+    if (listedJob) {
+      setSelectedJob(routeStateJob ? { ...listedJob, ...routeStateJob } : listedJob)
+      setSelectedJobError('')
+      return
+    }
+
+    if (routeStateJob) {
+      setSelectedJob(routeStateJob)
+    }
+
+    loadSelectedJob(selectedJobId, routeStateJob)
+  }, [selectedJobId, jobs, location.state])
 
   useEffect(() => {
     if ((activeView === 'targetProfiles' || activeView === 'matches' || activeView === 'chat') && !hasLoadedProfiles && !isLoadingProfiles) {
@@ -371,6 +398,21 @@ function App() {
     }
   }
 
+  async function loadSelectedJob(jobId = selectedJobId, contextJob = null) {
+    if (!jobId) return
+    setIsLoadingSelectedJob(true)
+    setSelectedJobError('')
+    try {
+      const loadedJob = await getJob(jobId)
+      setSelectedJob(contextJob ? { ...loadedJob, ...contextJob } : loadedJob)
+    } catch (error) {
+      setSelectedJob(null)
+      setSelectedJobError(error.message)
+    } finally {
+      setIsLoadingSelectedJob(false)
+    }
+  }
+
   async function loadProfiles() {
     setIsLoadingProfiles(true)
     setProfilesError('')
@@ -412,7 +454,7 @@ function App() {
   return (
     <TooltipProvider>
       <SidebarProvider
-        open={(activeView === 'chat' || activeView === 'targetProfiles' || activeView === 'matches') && isContextPanelOpen}
+        open={(activeView === 'chat' || (activeView === 'jobs' && selectedJobId) || activeView === 'targetProfiles' || activeView === 'matches') && isContextPanelOpen}
         onOpenChange={setIsContextPanelOpen}
         style={{
           '--sidebar-width': '22rem',
@@ -423,6 +465,9 @@ function App() {
           activeView={activeView}
           threads={threads}
           activeThreadId={activeThreadId}
+          jobs={jobs}
+          selectedJobId={selectedJobId}
+          isLoadingJobs={isLoadingJobs}
           profiles={profiles}
           selectedProfileId={selectedProfileId}
           isLoadingProfiles={isLoadingProfiles}
@@ -432,13 +477,14 @@ function App() {
           onThreadRename={renameThread}
           onThreadDuplicate={duplicateThread}
           onThreadDelete={deleteThread}
+          onJobsRefresh={loadJobs}
           onProfileSelect={setSelectedProfileId}
           onProfilesRefresh={loadProfiles}
         />
         <SidebarInset className="chat-root">
           <main className={activeView === 'chat' ? 'chat-page' : 'workspace-page'}>
             {activeView === 'chat' && <ChatView messages={messages} draft={draft} isSending={isSending} selectedProfile={selectedProfile} onDraftChange={setDraft} onSubmit={submitMessage} />}
-            {(activeView === 'chat' || activeView === 'targetProfiles' || activeView === 'matches') && (
+            {(activeView === 'chat' || (activeView === 'jobs' && selectedJobId) || activeView === 'targetProfiles' || activeView === 'matches') && (
               <button
                 className="chat-context-toggle"
                 type="button"
@@ -449,7 +495,7 @@ function App() {
                 {isContextPanelOpen ? <PanelLeftCloseIcon className="size-4" /> : <PanelLeftOpenIcon className="size-4" />}
               </button>
             )}
-            {activeView === 'jobs' && <JobsView jobs={jobs} isLoading={isLoadingJobs} error={jobsError} onRefresh={loadJobs} />}
+            {activeView === 'jobs' && <JobsView jobs={jobs} selectedJob={selectedJob} selectedJobId={selectedJobId} isLoading={isLoadingJobs} isLoadingSelectedJob={isLoadingSelectedJob} error={jobsError} selectedJobError={selectedJobError} onRefresh={loadJobs} onRefreshSelectedJob={() => loadSelectedJob(selectedJobId)} />}
             {activeView === 'candidate' && <CandidateView />}
             {activeView === 'settings' && <SettingsView />}
             {activeView === 'targetProfiles' && (
@@ -473,7 +519,15 @@ function App() {
   )
 }
 
+function selectedJobIdFromPath(pathname) {
+  const match = pathname.match(/^\/jobs\/([^/]+)$/)
+  return match ? decodeURIComponent(match[1]) : null
+}
+
 function contextPanelToggleLabel(activeView, isOpen) {
+  if (activeView === 'jobs') {
+    return isOpen ? 'Hide job list' : 'Show job list'
+  }
   if (activeView === 'targetProfiles' || activeView === 'matches') {
     return isOpen ? 'Hide target profile list' : 'Show target profile list'
   }
