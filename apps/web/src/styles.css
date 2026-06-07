@@ -1056,6 +1056,429 @@ textarea {
   color: var(--foreground);
 }
 
+.candidate-dossier {
+  width: min(1180px, 100%);
+  min-height: 100svh;
+  margin: 0 auto;
+  padding: clamp(24px, 5vw, 56px) 20px;
+}
+
+.candidate-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1.05fr) minmax(340px, 0.6fr);
+  gap: clamp(22px, 4vw, 48px);
+  align-items: stretch;
+  margin-bottom: 34px;
+}
+
+.candidate-hero-copy {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid rgba(223, 231, 223, 0.9);
+  border-radius: 2.25rem;
+  background:
+    radial-gradient(circle at 12% 18%, rgba(215, 234, 220, 0.9), transparent 18rem),
+    linear-gradient(135deg, rgba(255, 254, 251, 0.96), rgba(247, 242, 232, 0.82));
+  padding: clamp(28px, 5vw, 52px);
+  box-shadow: 0 26px 82px rgba(47, 66, 52, 0.1);
+}
+
+.candidate-hero-copy::after {
+  content: "";
+  position: absolute;
+  right: -4rem;
+  bottom: -6rem;
+  width: 18rem;
+  height: 18rem;
+  border: 1px solid rgba(49, 83, 63, 0.12);
+  border-radius: 50%;
+}
+
+.candidate-hero-copy p,
+.candidate-section-heading p,
+.candidate-editor-heading p {
+  margin: 0 0 12px;
+  color: var(--green);
+  font-size: 0.78rem;
+  font-weight: 900;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.candidate-hero-copy h1 {
+  position: relative;
+  z-index: 1;
+  margin: 0;
+  max-width: 10ch;
+  color: var(--foreground);
+  font-size: clamp(3.2rem, 9vw, 7.5rem);
+  font-weight: 1000;
+  letter-spacing: -0.09em;
+  line-height: 0.88;
+}
+
+.candidate-hero-copy > span,
+.candidate-hero-copy blockquote {
+  position: relative;
+  z-index: 1;
+  display: block;
+  max-width: 680px;
+  color: var(--muted);
+  font-size: 1.04rem;
+  line-height: 1.7;
+}
+
+.candidate-hero-copy > span {
+  margin-top: 18px;
+  color: var(--green);
+  font-weight: 900;
+}
+
+.candidate-hero-copy blockquote {
+  margin: 18px 0 0;
+  border-left: 3px solid rgba(49, 83, 63, 0.32);
+  padding-left: 16px;
+}
+
+.candidate-hero-panel,
+.candidate-alert,
+.candidate-evidence-section {
+  border: 1px solid rgba(223, 231, 223, 0.9);
+  border-radius: 1.75rem;
+  background: rgba(255, 254, 251, 0.82);
+  box-shadow: 0 20px 68px rgba(47, 66, 52, 0.08);
+}
+
+.candidate-hero-panel {
+  display: grid;
+  align-content: start;
+  gap: 16px;
+  padding: 22px;
+}
+
+.candidate-stat-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.candidate-stat {
+  display: grid;
+  gap: 4px;
+  border-radius: 1.25rem;
+  background: var(--green-soft);
+  padding: 14px;
+}
+
+.candidate-stat strong {
+  color: var(--green);
+  font-size: 1.6rem;
+  font-weight: 1000;
+  letter-spacing: -0.06em;
+  line-height: 1;
+}
+
+.candidate-stat span,
+.candidate-hero-panel small {
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 900;
+}
+
+.candidate-action-row,
+.candidate-filter-row,
+.candidate-editor-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+}
+
+.candidate-action-row button,
+.candidate-upload-button,
+.candidate-identity-form button,
+.candidate-editor-actions button {
+  border: 0;
+  border-radius: 999px;
+  background: var(--green);
+  color: white;
+  padding: 11px 16px;
+  font-weight: 900;
+  cursor: pointer;
+  box-shadow: 0 14px 34px rgba(49, 83, 63, 0.16);
+}
+
+.candidate-action-row button[data-secondary="true"],
+.candidate-editor-actions button[data-danger="true"] {
+  background: rgba(49, 83, 63, 0.08);
+  color: var(--green);
+  box-shadow: none;
+}
+
+.candidate-upload-button input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+}
+
+.candidate-filter-row input[type="text"],
+.candidate-filter-row > input,
+.candidate-identity-form input,
+.candidate-identity-form textarea,
+.candidate-editor input,
+.candidate-editor textarea,
+.candidate-editor select {
+  width: 100%;
+  border: 0;
+  border-radius: 0;
+  outline: 0;
+  background: rgba(255, 254, 251, 0.76);
+  color: var(--foreground);
+  box-shadow: inset 0 -1px 0 rgba(49, 83, 63, 0.18);
+  padding: 11px 0;
+  font: inherit;
+  font-weight: 700;
+}
+
+.candidate-filter-row > input {
+  flex: 1 1 220px;
+}
+
+.candidate-filter-row label,
+.candidate-identity-form label,
+.candidate-editor label,
+.candidate-checkbox {
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-weight: 900;
+}
+
+.candidate-filter-row label,
+.candidate-checkbox {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.candidate-identity-form,
+.candidate-editor form {
+  display: grid;
+  gap: 12px;
+}
+
+.candidate-identity-form label,
+.candidate-editor label {
+  display: grid;
+  gap: 7px;
+}
+
+.candidate-alert {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 22px;
+  padding: 18px;
+  color: var(--muted);
+}
+
+.candidate-alert strong {
+  color: var(--foreground);
+}
+
+.candidate-section-stack {
+  display: grid;
+  gap: 18px;
+}
+
+.candidate-evidence-section {
+  padding: clamp(18px, 3vw, 28px);
+}
+
+.candidate-section-heading {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 18px;
+  margin-bottom: 16px;
+}
+
+.candidate-section-heading h2,
+.candidate-editor-heading h2 {
+  margin: 0;
+  color: var(--foreground);
+  font-size: clamp(1.55rem, 3vw, 2.35rem);
+  font-weight: 1000;
+  letter-spacing: -0.06em;
+  line-height: 0.95;
+}
+
+.candidate-section-heading > div:last-child {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.candidate-section-heading span {
+  display: grid;
+  min-width: 2.1rem;
+  height: 2.1rem;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--green-soft);
+  color: var(--green);
+  font-weight: 1000;
+}
+
+.candidate-section-heading button {
+  border: 0;
+  background: transparent;
+  color: var(--green);
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.candidate-empty-section {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.92rem;
+}
+
+.candidate-evidence-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 12px;
+}
+
+.candidate-evidence-card button {
+  display: grid;
+  gap: 10px;
+  width: 100%;
+  min-height: 100%;
+  border: 1px solid rgba(223, 231, 223, 0.9);
+  border-radius: 1.25rem;
+  background: rgba(247, 242, 232, 0.45);
+  color: inherit;
+  padding: 16px;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 180ms ease, background 180ms ease, transform 180ms ease;
+}
+
+.candidate-evidence-card button:hover {
+  border-color: rgba(49, 83, 63, 0.34);
+  background: rgba(238, 244, 239, 0.78);
+  transform: translateY(-2px);
+}
+
+.candidate-evidence-card[data-review="true"] button {
+  border-color: rgba(138, 93, 47, 0.28);
+  background: rgba(255, 247, 236, 0.68);
+}
+
+.candidate-card-topline {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  color: var(--green);
+  font-size: 0.72rem;
+  font-weight: 1000;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.candidate-card-topline strong {
+  border-radius: 999px;
+  background: var(--warning-bg);
+  color: var(--warning);
+  padding: 4px 7px;
+  letter-spacing: 0.08em;
+}
+
+.candidate-evidence-card h3 {
+  margin: 0;
+  color: var(--foreground);
+  font-size: 1.08rem;
+  font-weight: 1000;
+  letter-spacing: -0.04em;
+}
+
+.candidate-evidence-card p,
+.candidate-evidence-card blockquote,
+.candidate-evidence-card small {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.86rem;
+  line-height: 1.55;
+}
+
+.candidate-evidence-card blockquote {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-line-clamp: 4;
+  -webkit-box-orient: vertical;
+}
+
+.candidate-tag-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.candidate-tag-row span {
+  border: 1px solid rgba(223, 231, 223, 0.95);
+  border-radius: 999px;
+  background: rgba(255, 254, 251, 0.84);
+  color: var(--green);
+  padding: 4px 7px;
+  font-size: 0.7rem;
+  font-weight: 900;
+}
+
+.candidate-editor-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  justify-content: flex-end;
+  background: rgba(23, 33, 27, 0.22);
+  backdrop-filter: blur(8px);
+}
+
+.candidate-editor {
+  width: min(460px, 100%);
+  height: 100%;
+  overflow-y: auto;
+  border-left: 1px solid rgba(223, 231, 223, 0.9);
+  background: rgba(255, 254, 251, 0.96);
+  padding: 24px;
+  box-shadow: -24px 0 80px rgba(23, 33, 27, 0.16);
+}
+
+.candidate-editor-heading {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 18px;
+}
+
+.candidate-editor-heading button {
+  align-self: start;
+  border: 0;
+  background: transparent;
+  color: var(--green);
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.candidate-editor-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
 .candidate-target-panel {
   position: sticky;
   top: 24px;

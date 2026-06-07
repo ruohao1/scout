@@ -26,6 +26,7 @@ import {
   updateProfileSkill,
 } from './api.js'
 import { applyChatStreamEvent, failRunningActivities } from './features/chat/chatStreamReducer.js'
+import { CandidateView } from './features/candidate/CandidateView.jsx'
 import { ChatView } from './features/chat/ChatView.jsx'
 import { JobsView } from './features/jobs/JobsView.jsx'
 import { MatchesView } from './features/matches/MatchesView.jsx'
@@ -599,16 +600,7 @@ function App() {
               </button>
             )}
             {activeView === 'jobs' && <JobsView jobs={jobs} isLoading={isLoadingJobs} error={jobsError} onRefresh={loadJobs} />}
-            {activeView === 'candidate' && (
-              <ProfilesView
-                profiles={profiles}
-                selectedProfileId={selectedProfileId}
-                isCreating={isCreatingProfile || isLoadingProfiles}
-                error={profilesError}
-                onSelectProfile={setSelectedProfileId}
-                onProfilesRefresh={loadProfiles}
-              />
-            )}
+            {activeView === 'candidate' && <CandidateView />}
             {activeView === 'matches' && (
               <MatchesView selectedProfile={selectedProfile} matches={rankedMatches} isLoading={isLoadingMatches} error={matchesError} onRefresh={() => selectedProfileExists && loadMatches(selectedProfileId)} onOpenProfiles={() => changeView('targetProfiles')} />
             )}
