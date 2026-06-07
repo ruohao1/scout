@@ -1,3 +1,5 @@
+export const ACTIVE_TARGET_PROFILE_ID_KEY = 'scout.activeTargetProfileId'
+
 export function readStoredJson(key, fallback) {
   try {
     const value = window.localStorage.getItem(key)

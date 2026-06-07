@@ -173,6 +173,122 @@ export function profileCvUrl(profileId) {
   return `${API_BASE_URL}/profiles/${profileId}/cv`
 }
 
+export async function getCandidate() {
+  const response = await fetch(`${API_BASE_URL}/candidate`)
+
+  if (!response.ok) {
+    throw new Error(await errorMessage(response, `Candidate request failed with HTTP ${response.status}`))
+  }
+
+  return response.json()
+}
+
+export async function updateCandidate(candidate) {
+  return jsonRequest('/candidate', 'PUT', candidate, 'Candidate update failed')
+}
+
+export async function listCandidateDocuments({ limit = 50 } = {}) {
+  const params = new URLSearchParams({ limit: String(limit) })
+  const response = await fetch(`${API_BASE_URL}/candidate/documents?${params.toString()}`)
+
+  if (!response.ok) {
+    throw new Error(await errorMessage(response, `Candidate documents request failed with HTTP ${response.status}`))
+  }
+
+  return response.json()
+}
+
+export async function uploadCandidateDocument(formData) {
+  const controller = new AbortController()
+  const timeoutId = window.setTimeout(() => controller.abort(), PROFILE_UPLOAD_TIMEOUT_MS)
+  let response
+  try {
+    response = await fetch(`${API_BASE_URL}/candidate/documents/upload`, {
+      method: 'POST',
+      body: formData,
+      signal: controller.signal,
+    })
+  } catch (error) {
+    if (error instanceof DOMException && error.name === 'AbortError') {
+      throw new Error('Candidate document upload timed out. Try a smaller PDF or disable AI extraction.')
+    }
+    throw error
+  } finally {
+    window.clearTimeout(timeoutId)
+  }
+
+  if (!response.ok) {
+    throw new Error(await errorMessage(response, `Candidate document upload failed with HTTP ${response.status}`))
+  }
+
+  return response.json()
+}
+
+export async function listCandidateEvidence({ type = null, limit = 200 } = {}) {
+  const params = new URLSearchParams({ limit: String(limit) })
+  if (type) params.set('type', type)
+  const response = await fetch(`${API_BASE_URL}/candidate/evidence?${params.toString()}`)
+
+  if (!response.ok) {
+    throw new Error(await errorMessage(response, `Candidate evidence request failed with HTTP ${response.status}`))
+  }
+
+  return response.json()
+}
+
+export async function createCandidateEvidence(evidence) {
+  return jsonRequest('/candidate/evidence', 'POST', evidence, 'Candidate evidence create failed')
+}
+
+export async function updateCandidateEvidence(evidenceId, evidence) {
+  return jsonRequest(`/candidate/evidence/${evidenceId}`, 'PUT', evidence, 'Candidate evidence update failed')
+}
+
+export async function deleteCandidateEvidence(evidenceId) {
+  await deleteRequest(`/candidate/evidence/${evidenceId}`, 'Candidate evidence delete failed')
+}
+
+export async function reindexCandidateEvidence() {
+  return jsonRequest('/candidate/evidence/reindex', 'POST', {}, 'Candidate evidence reindex failed')
+}
+
+export async function listTargetProfiles({ limit = 50 } = {}) {
+  const params = new URLSearchParams({ limit: String(limit) })
+  const response = await fetch(`${API_BASE_URL}/target-profiles?${params.toString()}`)
+
+  if (!response.ok) {
+    throw new Error(await errorMessage(response, `Target profiles request failed with HTTP ${response.status}`))
+  }
+
+  return response.json()
+}
+
+export async function createTargetProfile(profile) {
+  return jsonRequest('/target-profiles', 'POST', profile, 'Target profile create failed')
+}
+
+export async function getTargetProfile(targetProfileId) {
+  const response = await fetch(`${API_BASE_URL}/target-profiles/${targetProfileId}`)
+
+  if (!response.ok) {
+    throw new Error(await errorMessage(response, `Target profile request failed with HTTP ${response.status}`))
+  }
+
+  return response.json()
+}
+
+export async function updateTargetProfile(targetProfileId, profile) {
+  return jsonRequest(`/target-profiles/${targetProfileId}`, 'PUT', profile, 'Target profile update failed')
+}
+
+export async function deleteTargetProfile(targetProfileId) {
+  await deleteRequest(`/target-profiles/${targetProfileId}`, 'Target profile delete failed')
+}
+
+export async function suggestTargetProfiles({ count = 3 } = {}) {
+  return jsonRequest('/target-profiles/suggest', 'POST', { count }, 'Target profile suggestion failed')
+}
+
 export async function createProfileExperience(profileId, experience) {
   return profileJsonRequest(`/profiles/${profileId}/experiences`, 'POST', experience, 'Profile experience create failed')
 }
@@ -235,6 +351,32 @@ export async function rankJobsForProfile({ profileId, filters, limit = 10 }) {
   return response.json()
 }
 
+export async function rankJobsForTargetProfile({ targetProfileId, filters, limit = 10 }) {
+  const response = await fetch(`${API_BASE_URL}/rank-jobs`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      target_profile_id: targetProfileId,
+      filters: filters || {
+        location: null,
+        contract_type: null,
+        company: null,
+        seniority: null,
+        remote_policy: null,
+      },
+      limit,
+    }),
+  })
+
+  if (!response.ok) {
+    throw new Error(await errorMessage(response, `Rank jobs request failed with HTTP ${response.status}`))
+  }
+
+  return response.json()
+}
+
 export { API_BASE_URL }
 
 async function errorMessage(response, fallback) {
@@ -253,6 +395,10 @@ async function errorMessage(response, fallback) {
 }
 
 async function profileJsonRequest(path, method, payload, fallback) {
+  return jsonRequest(path, method, payload, fallback)
+}
+
+async function jsonRequest(path, method, payload, fallback) {
   const response = await fetch(`${API_BASE_URL}${path}`, {
     method,
     headers: {
@@ -269,6 +415,10 @@ async function profileJsonRequest(path, method, payload, fallback) {
 }
 
 async function profileDeleteRequest(path, fallback) {
+  return deleteRequest(path, fallback)
+}
+
+async function deleteRequest(path, fallback) {
   const response = await fetch(`${API_BASE_URL}${path}`, {
     method: 'DELETE',
   })
