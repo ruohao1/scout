@@ -5,7 +5,7 @@ import { profileName } from '../../lib/profile.js'
 import { JobDetailPane } from '../jobs/JobDetailPane.jsx'
 import { ChatMessage } from './ChatMessage.jsx'
 
-export function ChatView({ messages, draft, isSending, selectedProfile, selectedJobId, selectedJob, isJobPaneOpen, isLoadingSelectedJob, isRefreshingDescription, selectedJobError, descriptionRefreshError, onDraftChange, onSubmit, onShowJobPane, onCloseJobPane, onRefreshSelectedJob, onRefreshDescription }) {
+export function ChatView({ messages, draft, isSending, selectedProfile, selectedJobId, selectedJob, isJobPaneOpen, isLoadingSelectedJob, selectedJobError, onDraftChange, onSubmit, onShowJobPane, onCloseJobPane, onRefreshSelectedJob }) {
   const hasMountedRef = useRef(false)
 
   useEffect(() => {
@@ -26,7 +26,7 @@ export function ChatView({ messages, draft, isSending, selectedProfile, selected
       <button className="chat-job-close" type="button" onClick={onCloseJobPane} aria-label="Hide job detail" title="Hide job detail">
         <PanelRightCloseIcon className="size-4" />
       </button>
-      <JobDetailPane job={selectedJob} isLoading={isLoadingSelectedJob} error={selectedJobError} descriptionRefreshError={descriptionRefreshError} onRefresh={onRefreshSelectedJob} onRefreshDescription={onRefreshDescription} isRefreshingDescription={isRefreshingDescription} />
+      <JobDetailPane job={selectedJob} isLoading={isLoadingSelectedJob} error={selectedJobError} onRefresh={onRefreshSelectedJob} />
     </div>
   ) : null
 

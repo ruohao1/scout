@@ -9,7 +9,6 @@ import {
   listTargetProfiles,
   listJobs,
   rankJobsForTargetProfile,
-  refreshJobDescription,
   sendChatMessageStream,
 } from './api.js'
 import { applyChatStreamEvent, failRunningActivities } from './features/chat/chatStreamReducer.js'
@@ -122,9 +121,7 @@ function App() {
   const [hasLoadedJobs, setHasLoadedJobs] = useState(false)
   const [selectedJob, setSelectedJob] = useState(null)
   const [isLoadingSelectedJob, setIsLoadingSelectedJob] = useState(false)
-  const [isRefreshingDescription, setIsRefreshingDescription] = useState(false)
   const [selectedJobError, setSelectedJobError] = useState('')
-  const [descriptionRefreshError, setDescriptionRefreshError] = useState('')
   const [profiles, setProfiles] = useState([])
   const [selectedProfileId, setSelectedProfileId] = useState(() => readStoredString(STORAGE_KEYS.selectedProfileId, null))
   const [isLoadingProfiles, setIsLoadingProfiles] = useState(false)
@@ -192,7 +189,6 @@ function App() {
     if (!selectedDetailJobId) {
       setSelectedJob(null)
       setSelectedJobError('')
-      setDescriptionRefreshError('')
       return
     }
 
@@ -415,7 +411,6 @@ function App() {
     if (!jobId) return
     setIsLoadingSelectedJob(true)
     setSelectedJobError('')
-    setDescriptionRefreshError('')
     try {
       const loadedJob = await getJob(jobId)
       setSelectedJob(contextJob ? { ...contextJob, ...loadedJob } : loadedJob)
@@ -424,21 +419,6 @@ function App() {
       setSelectedJobError(error.message)
     } finally {
       setIsLoadingSelectedJob(false)
-    }
-  }
-
-  async function refreshSelectedJobDescription(jobId = selectedDetailJobId) {
-    if (!jobId || isRefreshingDescription) return
-    setIsRefreshingDescription(true)
-    setDescriptionRefreshError('')
-    try {
-      const result = await refreshJobDescription(jobId)
-      setSelectedJob(result.job)
-      setJobs((current) => current.map((job) => (job.id === jobId ? { ...job, ...result.job } : job)))
-    } catch (error) {
-      setDescriptionRefreshError(error.message)
-    } finally {
-      setIsRefreshingDescription(false)
     }
   }
 
@@ -523,7 +503,6 @@ function App() {
                 isJobPaneOpen={Boolean(selectedChatJobId && !isContextPanelOpen)}
                 isLoadingSelectedJob={isLoadingSelectedJob}
                 selectedJobError={selectedJobError}
-                descriptionRefreshError={descriptionRefreshError}
                 onDraftChange={setDraft}
                 onSubmit={submitMessage}
                 onShowJobPane={() => setIsContextPanelOpen(false)}
@@ -532,8 +511,6 @@ function App() {
                   setIsContextPanelOpen(false)
                 }}
                 onRefreshSelectedJob={() => loadSelectedJob(selectedChatJobId)}
-                onRefreshDescription={() => refreshSelectedJobDescription(selectedChatJobId)}
-                isRefreshingDescription={isRefreshingDescription}
               />
             )}
             {(activeView === 'chat' || (activeView === 'jobs' && selectedDetailJobId) || activeView === 'targetProfiles' || activeView === 'matches') && (
@@ -547,7 +524,7 @@ function App() {
                 {isContextPanelOpen ? <PanelLeftCloseIcon className="size-4" /> : <PanelLeftOpenIcon className="size-4" />}
               </button>
             )}
-            {activeView === 'jobs' && <JobsView jobs={jobs} selectedJob={selectedJob} selectedJobId={selectedDetailJobId} isTailoringCv={Boolean(selectedTailoredCvJobId)} selectedProfile={selectedProfile} isLoading={isLoadingJobs} isLoadingSelectedJob={isLoadingSelectedJob} isRefreshingDescription={isRefreshingDescription} error={jobsError} selectedJobError={selectedJobError} descriptionRefreshError={descriptionRefreshError} onRefresh={loadJobs} onRefreshSelectedJob={() => loadSelectedJob(selectedDetailJobId)} onRefreshDescription={() => refreshSelectedJobDescription(selectedDetailJobId)} />}
+            {activeView === 'jobs' && <JobsView jobs={jobs} selectedJob={selectedJob} selectedJobId={selectedDetailJobId} isTailoringCv={Boolean(selectedTailoredCvJobId)} selectedProfile={selectedProfile} isLoading={isLoadingJobs} isLoadingSelectedJob={isLoadingSelectedJob} error={jobsError} selectedJobError={selectedJobError} onRefresh={loadJobs} onRefreshSelectedJob={() => loadSelectedJob(selectedDetailJobId)} />}
             {activeView === 'candidate' && <CandidateView />}
             {activeView === 'settings' && <SettingsView />}
             {activeView === 'targetProfiles' && (

@@ -3,7 +3,7 @@ import { JobCard } from './JobCard.jsx'
 import { JobDetailPane } from './JobDetailPane.jsx'
 import { TailoredCVPane } from './TailoredCVPane.jsx'
 
-export function JobsView({ jobs, selectedJob, selectedJobId, isTailoringCv, selectedProfile, isLoading, isLoadingSelectedJob, isRefreshingDescription, error, selectedJobError, descriptionRefreshError, onRefresh, onRefreshSelectedJob, onRefreshDescription }) {
+export function JobsView({ jobs, selectedJob, selectedJobId, isTailoringCv, selectedProfile, isLoading, isLoadingSelectedJob, error, selectedJobError, onRefresh, onRefreshSelectedJob }) {
   if (selectedJobId) {
     const rightPane = isTailoringCv ? <TailoredCVPane jobId={selectedJobId} selectedProfile={selectedProfile} /> : null
 
@@ -16,7 +16,7 @@ export function JobsView({ jobs, selectedJob, selectedJobId, isTailoringCv, sele
               <span>{error}</span>
             </div>
           )}
-          <JobDetailPane job={selectedJob} isLoading={isLoadingSelectedJob} error={selectedJobError} descriptionRefreshError={descriptionRefreshError} onRefresh={onRefreshSelectedJob} onRefreshDescription={onRefreshDescription} isRefreshingDescription={isRefreshingDescription} />
+          <JobDetailPane job={selectedJob} isLoading={isLoadingSelectedJob} error={selectedJobError} onRefresh={onRefreshSelectedJob} />
         </section>
       </WorkspaceShell>
     )

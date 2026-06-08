@@ -133,6 +133,23 @@ class JobRepository:
             ).fetchone()
         return dict(row) if row is not None else None
 
+    def get_by_url(self, job_url: str) -> dict[str, Any] | None:
+        with psycopg.connect(self.url, row_factory=dict_row) as conn:
+            row = conn.execute(
+                f"""
+                SELECT {JOB_LIST_COLUMNS}
+                FROM jobs
+                LEFT JOIN (
+                    SELECT job_id, count(*) AS chunk_count
+                    FROM job_chunks
+                    GROUP BY job_id
+                ) indexed ON indexed.job_id = jobs.id
+                WHERE jobs.url = %(job_url)s
+                """,
+                {"job_url": job_url},
+            ).fetchone()
+        return dict(row) if row is not None else None
+
     def update_description(
         self,
         job_id: str,

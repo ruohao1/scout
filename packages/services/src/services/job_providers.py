@@ -15,6 +15,7 @@ from psycopg.errors import UniqueViolation
 
 from db.jobs import JobRepository
 
+from .job_description_enrichment import JobDescriptionUnavailableError, enrich_weak_job_description, has_weak_job_description
 from .job_indexing import index_job
 from .job_skills import enrich_job_skills
 
@@ -255,9 +256,21 @@ def import_jobs(
     skipped = 0
 
     for payload in client.fetch_jobs(count=count):
+        normalized = adapter.normalize(payload)
         try:
-            job = repository.create(enrich_job_skills(adapter.normalize(payload)))
+            try:
+                normalized = enrich_weak_job_description(
+                    normalized,
+                    infer_seniority=_infer_seniority,
+                    infer_remote_policy=_infer_remote_policy,
+                )
+            except JobDescriptionUnavailableError:
+                pass
+            job = repository.create(enrich_job_skills(normalized))
         except UniqueViolation:
+            updated = _update_weak_duplicate(normalized, jobs=repository, should_index=should_index)
+            if updated:
+                indexed += 1 if should_index else 0
             skipped += 1
             continue
         created.append(job)
@@ -266,6 +279,29 @@ def import_jobs(
             indexed += 1
 
     return JobImportResult(created=created, indexed=indexed, skipped=skipped)
+
+
+def _update_weak_duplicate(normalized: dict[str, Any], *, jobs: JobRepository, should_index: bool) -> dict[str, Any] | None:
+    job_url = normalized.get("url")
+    if not isinstance(job_url, str) or not job_url.startswith(("http://", "https://")):
+        return None
+    if has_weak_job_description(normalized):
+        return None
+    existing = jobs.get_by_url(job_url)
+    if existing is None or not has_weak_job_description(existing):
+        return None
+    enriched = enrich_job_skills(normalized)
+    updated = jobs.update_description(
+        str(existing["id"]),
+        description=str(normalized["description"]),
+        skills=enriched.get("skills") or [],
+        seniority=enriched.get("seniority"),
+        remote_policy=enriched.get("remote_policy"),
+        raw_payload=normalized.get("raw_payload") or {},
+    )
+    if updated and should_index:
+        index_job(str(existing["id"]), jobs=jobs)
+    return updated
 
 
 def _adzuna_location(location: dict[str, Any]) -> str | None:

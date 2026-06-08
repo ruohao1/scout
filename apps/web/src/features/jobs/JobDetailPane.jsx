@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom'
-import { BanknoteIcon, BriefcaseBusinessIcon, Building2Icon, ExternalLinkIcon, FileTextIcon, MapPinIcon, RefreshCwIcon, SparklesIcon, TargetIcon } from 'lucide-react'
+import { BanknoteIcon, BriefcaseBusinessIcon, Building2Icon, ExternalLinkIcon, FileTextIcon, MapPinIcon, SparklesIcon, TargetIcon } from 'lucide-react'
 
-export function JobDetailPane({ job, isLoading, error, descriptionRefreshError, onRefresh, onRefreshDescription, isRefreshingDescription = false }) {
+export function JobDetailPane({ job, isLoading, error, onRefresh }) {
   if (isLoading) {
     return (
       <aside className="job-detail-pane" aria-label="Selected job details">
@@ -41,7 +41,6 @@ export function JobDetailPane({ job, isLoading, error, descriptionRefreshError, 
   const missingSkills = job.missing_skills || []
   const description = job.description || job.content || 'No description is available for this job.'
   const jobId = job.id || job.job_id
-  const hasWeakDescription = isWeakDescription(description)
 
   return (
     <aside className="job-detail-pane" aria-label="Selected job details">
@@ -65,12 +64,6 @@ export function JobDetailPane({ job, isLoading, error, descriptionRefreshError, 
                 <FileTextIcon aria-hidden="true" />
               </Link>
             )}
-            {jobId && hasWeakDescription && onRefreshDescription && (
-              <button className="job-detail-link job-detail-action-button" type="button" onClick={onRefreshDescription} disabled={isRefreshingDescription}>
-                {isRefreshingDescription ? 'Refreshing description' : 'Refresh description'}
-                <RefreshCwIcon aria-hidden="true" />
-              </button>
-            )}
             {job.url && (
               <a className="job-detail-link" href={job.url} target="_blank" rel="noreferrer">
                 Open original posting
@@ -78,11 +71,6 @@ export function JobDetailPane({ job, isLoading, error, descriptionRefreshError, 
               </a>
             )}
           </div>
-          {descriptionRefreshError && (
-            <div className="job-detail-refresh-error warning-state" role="alert">
-              {descriptionRefreshError}
-            </div>
-          )}
         </header>
 
         {(matchedSkills.length > 0 || missingSkills.length > 0 || job.evidence?.length > 0) && (
@@ -125,10 +113,6 @@ export function JobDetailPane({ job, isLoading, error, descriptionRefreshError, 
       </div>
     </aside>
   )
-}
-
-function isWeakDescription(description) {
-  return String(description || '').trim().length < 250
 }
 
 function DetailFact({ icon, label, value }) {
