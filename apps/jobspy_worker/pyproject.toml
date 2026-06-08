@@ -1,0 +1,9 @@
+[project]
+name = "scout-jobspy-worker"
+version = "0.1.0"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "fastapi>=0.124",
+    "python-jobspy>=1.1.82",
+    "uvicorn>=0.38",
+]

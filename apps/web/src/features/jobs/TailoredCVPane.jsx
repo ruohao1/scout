@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { AlertTriangleIcon, CheckIcon, CopyIcon, DownloadIcon, FileTextIcon, RefreshCwIcon, SparklesIcon } from 'lucide-react'
-import { draftTailoredCv, draftTailoredCvLatex } from '../../api.js'
+import { draftTailoredCv, draftTailoredCvLatex, tailoredCvLatexPdfUrl } from '../../api.js'
 
 export function TailoredCVPane({ jobId, selectedProfile }) {
   const [instruction, setInstruction] = useState('')
@@ -191,7 +191,14 @@ export function TailoredCVPane({ jobId, selectedProfile }) {
                 <DownloadIcon aria-hidden="true" />
                 Download .tex
               </button>
+              {latexDraft.pdf_available && latexDraft.artifact_id && (
+                <a href={tailoredCvLatexPdfUrl(jobId, latexDraft.artifact_id)} download={latexDraft.pdf_filename || undefined}>
+                  <DownloadIcon aria-hidden="true" />
+                  Download PDF
+                </a>
+              )}
             </div>
+            <LatexPipelineStatus latexDraft={latexDraft} />
             {copyStatus && (
               <span className="tailored-cv-copy-status">
                 <CheckIcon aria-hidden="true" />
@@ -209,4 +216,35 @@ export function TailoredCVPane({ jobId, selectedProfile }) {
 
 function shortId(value) {
   return String(value).slice(0, 8)
+}
+
+function LatexPipelineStatus({ latexDraft }) {
+  const validation = latexDraft.validation
+  const compileResult = latexDraft.compile
+  if (!validation && !compileResult) return null
+
+  return (
+    <div className="tailored-cv-pipeline-status">
+      {validation && (
+        <span className={validation.valid ? 'success-state' : 'warning-state'}>
+          {validation.valid ? 'Validation passed' : 'Validation failed'}
+        </span>
+      )}
+      {validation?.issues?.length > 0 && (
+        <ul>
+          {validation.issues.map((issue) => <li key={issue}>{issue}</li>)}
+        </ul>
+      )}
+      {compileResult && (
+        <span className={compileResult.success ? 'success-state' : 'warning-state'}>
+          {compileResult.success ? 'PDF compiled' : 'PDF compilation failed'}
+        </span>
+      )}
+      {compileResult?.errors?.length > 0 && (
+        <ul>
+          {compileResult.errors.map((error) => <li key={error}>{error}</li>)}
+        </ul>
+      )}
+    </div>
+  )
 }

@@ -8,18 +8,47 @@ services:
       SCOUT_AUTH_DIR: /app/.auth
       SCOUT_EMBEDDINGS: ${SCOUT_EMBEDDINGS:-hash}
       SCOUT_EMBEDDING_DIMENSIONS: ${SCOUT_EMBEDDING_DIMENSIONS:-1536}
-      SCOUT_JOBSPY_SITES: ${SCOUT_JOBSPY_SITES:-indeed,linkedin,glassdoor,google}
+      SCOUT_JOBSPY_SITES: ${SCOUT_JOBSPY_SITES:-linkedin,indeed}
+      JOBSPY_WORKER_URL: ${JOBSPY_WORKER_URL:-http://jobspy-worker:8010}
       GEMINI_API_KEY: ${GEMINI_API_KEY:-}
       GEMINI_EMBEDDING_MODEL: ${GEMINI_EMBEDDING_MODEL:-gemini-embedding-001}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       OPENAI_EMBEDDING_MODEL: ${OPENAI_EMBEDDING_MODEL:-text-embedding-3-small}
+      LATEX_BRIDGE_URL: ${LATEX_BRIDGE_URL:-http://latex-mcp:8020}
+      LATEX_OUTPUT_DIR: /app/latex-output
+      LATEX_COMPILE_ENGINE: ${LATEX_COMPILE_ENGINE:-pdflatex}
     volumes:
       - ./.auth:/app/.auth
+      - latex-output:/app/latex-output
     ports:
       - 127.0.0.1:8000:8000
     depends_on:
       postgres:
         condition: service_healthy
+      jobspy-worker:
+        condition: service_started
+      latex-mcp:
+        condition: service_started
+
+  latex-mcp:
+    build:
+      context: .
+      dockerfile: Dockerfile.latex-mcp
+    environment:
+      LATEX_SERVER_BASE_PATH: /workspace
+      LATEX_MCP_COMMAND: python
+      LATEX_MCP_ARGS: /opt/mcp-latex-server/latex_server.py
+    volumes:
+      - latex-output:/workspace
+    ports:
+      - 127.0.0.1:8020:8020
+
+  jobspy-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.jobspy
+    ports:
+      - 127.0.0.1:8010:8010
 
   web:
     build:
@@ -29,16 +58,6 @@ services:
       - 127.0.0.1:5173:80
     depends_on:
       - api
-
-  redis:
-    image: redis:8-alpine
-    ports:
-      - 127.0.0.1:6379:6379
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 5s
-      timeout: 3s
-      retries: 20
 
   postgres:
     image: pgvector/pgvector:pg17
@@ -58,3 +77,4 @@ services:
 
 volumes:
   postgre-data:
+  latex-output:

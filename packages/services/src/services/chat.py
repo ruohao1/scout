@@ -333,6 +333,7 @@ def _merge_filters(text: str, filters: JobSearchFilters) -> JobSearchFilters:
         company=filters.company,
         seniority=filters.seniority or _first_seniority(normalized),
         remote_policy=filters.remote_policy or _first_remote_policy(normalized),
+        source=filters.source,
     )
 
 

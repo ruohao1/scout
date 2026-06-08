@@ -371,6 +371,7 @@ def _merge_job_search_filters(state_filters: dict[str, Any], route_filters: obje
         company=_string_filter(state_filters.get("company")) or _string_filter(route_values.get("company")),
         seniority=_string_filter(state_filters.get("seniority")) or _string_filter(route_values.get("seniority")),
         remote_policy=_string_filter(state_filters.get("remote_policy")) or _string_filter(route_values.get("remote_policy")),
+        source=_string_filter(state_filters.get("source")) or _string_filter(route_values.get("source")),
     )
 
 

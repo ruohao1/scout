@@ -42,7 +42,7 @@ class JobImportResult:
 SUPPORTED_JOBSPY_SITES = frozenset(
     {"bayt", "bdjobs", "glassdoor", "google", "indeed", "linkedin", "naukri", "zip_recruiter"}
 )
-DEFAULT_JOBSPY_SITES = ("indeed", "linkedin", "glassdoor", "google")
+DEFAULT_JOBSPY_SITES = ("linkedin", "indeed")
 
 
 def jobspy_sites(value: object | None = None) -> list[str]:
@@ -170,6 +170,8 @@ class JobSpyJobProviderClient:
         hours_old: int | None = None,
         country_indeed: str | None = "UK",
         verbose: int = 0,
+        worker_url: str | None = None,
+        timeout: float = 120.0,
     ) -> None:
         self.site_name = site_name or list(DEFAULT_JOBSPY_SITES)
         self.search_term = search_term
@@ -180,17 +182,14 @@ class JobSpyJobProviderClient:
         self.hours_old = hours_old
         self.country_indeed = country_indeed
         self.verbose = verbose
+        self.worker_url = (worker_url or os.environ.get("JOBSPY_WORKER_URL") or "").rstrip("/")
+        self.timeout = timeout
 
     def fetch_jobs(self, *, count: int) -> list[dict[str, Any]]:
         if count <= 0:
             return []
         if not self.search_term:
             raise ValueError("JobSpy search_term is required")
-
-        try:
-            from jobspy import scrape_jobs
-        except ImportError as exc:
-            raise RuntimeError("JobSpy is not installed. Run `uv sync` to install python-jobspy.") from exc
 
         params: dict[str, Any] = {
             "site_name": self.site_name,
@@ -212,8 +211,39 @@ class JobSpyJobProviderClient:
         if self.hours_old is not None:
             params["hours_old"] = self.hours_old
 
+        if self.worker_url:
+            return self._fetch_jobs_from_worker(params)
+
+        try:
+            from jobspy import scrape_jobs
+        except ImportError as exc:
+            raise RuntimeError(
+                "JobSpy is not installed. Run `uv sync` to install python-jobspy, "
+                "or set JOBSPY_WORKER_URL to a running JobSpy worker."
+            ) from exc
+
         jobs = scrape_jobs(**params)
         return [_json_safe(row) for row in jobs.to_dict(orient="records")]
+
+    def _fetch_jobs_from_worker(self, params: dict[str, Any]) -> list[dict[str, Any]]:
+        request = urllib.request.Request(
+            f"{self.worker_url}/scrape",
+            data=json.dumps(params).encode("utf-8"),
+            headers={"Content-Type": "application/json", "User-Agent": "scout-jobspy-client/0.1"},
+            method="POST",
+        )
+        try:
+            with urllib.request.urlopen(request, timeout=self.timeout) as response:
+                data = json.loads(response.read().decode("utf-8"))
+        except urllib.error.HTTPError as exc:
+            body = exc.read().decode("utf-8", errors="replace")
+            raise RuntimeError(f"JobSpy worker request failed with HTTP {exc.code}: {body}") from exc
+        except urllib.error.URLError as exc:
+            raise RuntimeError(f"JobSpy worker request failed: {exc.reason}") from exc
+
+        if not isinstance(data, dict) or not isinstance(data.get("jobs"), list):
+            raise ValueError("JobSpy worker response did not include a jobs list")
+        return [job for job in data["jobs"] if isinstance(job, dict)]
 
 
 class JobSpyJobProviderAdapter:
@@ -230,7 +260,7 @@ class JobSpyJobProviderAdapter:
             "title": title,
             "company": _string_value(payload, "company"),
             "location": _jobspy_location(payload),
-            "contract_type": _string_value(payload, "job_type"),
+            "contract_type": _jobspy_contract_type(payload, f"{title}\n{description}"),
             "source": self.source,
             "url": _jobspy_url(payload),
             "description": description,
@@ -404,6 +434,28 @@ def _jobspy_salary(payload: dict[str, Any]) -> str | None:
         return f"from {_format_number(minimum)}{suffix}"
     if maximum is not None:
         return f"up to {_format_number(maximum)}{suffix}"
+    return None
+
+
+def _jobspy_contract_type(payload: dict[str, Any], text: str) -> str | None:
+    job_type = _string_value(payload, "job_type")
+    if job_type:
+        normalized_type = job_type.strip().lower().replace("_", "-")
+        if normalized_type == "fulltime":
+            return "full-time"
+        if normalized_type == "parttime":
+            return "part-time"
+        return normalized_type
+
+    normalized = text.lower()
+    if re.search(r"\b(intern|internship|stage|stagiaire|placement)\b", normalized):
+        return "internship"
+    if re.search(r"\b(contract|contractor|freelance)\b", normalized):
+        return "contract"
+    if re.search(r"\b(part[- ]?time|temps partiel)\b", normalized):
+        return "part-time"
+    if re.search(r"\b(full[- ]?time|permanent|temps plein)\b", normalized):
+        return "full-time"
     return None
 
 

@@ -117,6 +117,12 @@ class TailoredCVLatexRead(BaseModel):
     latex: str
     template_id: str
     warnings: list[str] = Field(default_factory=list)
+    artifact_id: str | None = None
+    validation: dict[str, Any] | None = None
+    compile: dict[str, Any] | None = None
+    compiled: bool = False
+    pdf_filename: str | None = None
+    pdf_available: bool = False
 
 
 class AdzunaImportRequest(BaseModel):
@@ -404,6 +410,7 @@ class SearchFilters(BaseModel):
     company: str | None = None
     seniority: str | None = None
     remote_policy: str | None = None
+    source: str | None = None
 
 
 class SearchRequest(BaseModel):

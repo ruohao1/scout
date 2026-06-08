@@ -3,11 +3,12 @@ from __future__ import annotations
 from uuid import UUID
 
 from fastapi import APIRouter, HTTPException, Query
+from fastapi.responses import FileResponse
 from psycopg.errors import UniqueViolation
 
 from apps.api.schemas import JobCreate, JobDescriptionRefreshRead, JobIndexResult, JobRead, TailoredCVLatexRead, TailoredCVLatexRequest, TailoredCVRead, TailoredCVRequest
 from db.jobs import JobRepository
-from services.application_latex import TailoredCVLatexTemplateError, draft_tailored_cv_latex
+from services.application_latex import TailoredCVLatexTemplateError, draft_tailored_cv_latex, tailored_cv_latex_pdf_path
 from services.application_materials import (
     CandidateEvidenceUnavailableError,
     JobForApplicationNotFoundError,
@@ -94,6 +95,16 @@ def tailor_cv_latex_for_job(job_id: UUID, request: TailoredCVLatexRequest) -> di
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except TailoredCVGenerationError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+
+@router.get("/{job_id}/tailored-cv/latex/{artifact_id}/pdf")
+def download_tailored_cv_latex_pdf(job_id: UUID, artifact_id: str) -> FileResponse:
+    if JobRepository().get(str(job_id)) is None:
+        raise HTTPException(status_code=404, detail="Job not found")
+    pdf_path = tailored_cv_latex_pdf_path(artifact_id)
+    if pdf_path is None:
+        raise HTTPException(status_code=404, detail="PDF artifact not found")
+    return FileResponse(pdf_path, media_type="application/pdf", filename=pdf_path.name)
 
 
 @router.post("/{job_id}/refresh-description", response_model=JobDescriptionRefreshRead)

@@ -21,6 +21,8 @@ dist/
 .env.*
 
 # Tool caches
+.superpowers/
+graphify-out/
 docs/superpowers/
 .pytest_cache/
 .ruff_cache/
@@ -28,6 +30,9 @@ docs/superpowers/
 .coverage
 htmlcov/
 .playwright-mcp/
+
+# Generated application artifacts
+latex-output/
 
 # OS/editor noise
 .DS_Store

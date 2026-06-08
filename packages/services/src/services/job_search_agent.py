@@ -83,7 +83,7 @@ def respond_to_job_search_agent(
     if _target_profile_missing(local):
         _emit({"type": "step_completed", "id": "job_search_agent", "summary": "Target profile not found"})
         return ChatResult(message=target_profile_not_found_message(), tool="job_search_agent", warnings=local.get("warnings", []))
-    should_fetch_live = request.wants_live or (request.wants_ranking and not _has_good_enough_results(local, request.limit))
+    should_fetch_live = request.wants_live or not _has_good_enough_results(local, request.limit)
 
     if not should_fetch_live:
         _emit({"type": "step_completed", "id": "job_search_agent", "summary": f"Found {local_count} local results"})
@@ -98,6 +98,7 @@ def respond_to_job_search_agent(
     )
     warnings = [*local.get("warnings", []), *live_result.get("warnings", [])]
     if live_result.get("ok"):
+        _emit({"type": "step_started", "id": "refresh_ranked_jobs", "title": "Refresh ranking", "summary": "Refreshing ranking with imported jobs"})
         refreshed = _run_local_search(
             text=request.query,
             wants_ranking=request.wants_ranking,
@@ -109,6 +110,7 @@ def respond_to_job_search_agent(
         fetched = int(live_result.get("created") or 0)
         indexed = int(live_result.get("indexed") or 0)
         count = len(refreshed.get("ranked_jobs") or refreshed.get("jobs") or [])
+        _emit({"type": "step_completed", "id": "refresh_ranked_jobs", "summary": f"Returned {count} refreshed results"})
         _emit({"type": "step_completed", "id": "job_search_agent", "summary": f"Fetched {fetched} live jobs and returned {count} results"})
         return _chat_result_from_local(refreshed, fetched_live=True, created=fetched, indexed=indexed, warnings=warnings, search_text=request.query, filters=request.filters)
 
@@ -169,6 +171,7 @@ def _parse_job_find_request(
             company=merged_filters.company,
             seniority=seniority,
             remote_policy=merged_filters.remote_policy,
+            source=merged_filters.source,
         ),
     )
 
@@ -350,6 +353,7 @@ def _fetch_live_jobs(
             "id": "fetch_jobspy_jobs",
             "tool": "fetch_jobspy_jobs",
             "args": {**{key: value for key, value in base_params.items() if value is not None}, "attempts": attempts},
+            "summary": f"Preparing JobSpy live search with {_jobspy_sites_label(sites)}",
         }
     )
     runs = ProviderImportRunRepository()
@@ -362,7 +366,25 @@ def _fetch_live_jobs(
     for index, attempt in enumerate(attempts):
         country_indeed = _jobspy_country(attempt.get("location"))
         params = {**base_params, **attempt, "country_indeed": country_indeed}
-        attempted_labels.append(_jobspy_attempt_label(params))
+        attempt_label = _jobspy_attempt_label(params)
+        attempted_labels.append(attempt_label)
+        _emit(
+            {
+                "type": "tool_started",
+                "id": "fetch_jobspy_jobs",
+                "tool": "fetch_jobspy_jobs",
+                "args": {key: value for key, value in params.items() if value is not None},
+                "summary": f"Trying {_jobspy_sites_label(sites)} {attempt_label}",
+            }
+        )
+        _emit(
+            {
+                "type": "tool_started",
+                "id": "fetch_jobspy_jobs",
+                "tool": "fetch_jobspy_jobs",
+                "summary": f"Importing and indexing up to {count} live jobs",
+            }
+        )
         try:
             result = (importer or import_jobs)(
                 client=JobSpyJobProviderClient(
@@ -388,6 +410,14 @@ def _fetch_live_jobs(
         total_skipped += result.skipped
         total_indexed += result.indexed
         _record_jobspy_run(runs, params=params, created=created, skipped=result.skipped, indexed=result.indexed, status="completed", error=None)
+        _emit(
+            {
+                "type": "tool_started",
+                "id": "fetch_jobspy_jobs",
+                "tool": "fetch_jobspy_jobs",
+                "summary": f"Imported {created} jobs and indexed {result.indexed}",
+            }
+        )
         if created or result.skipped:
             break
         if index < len(attempts) - 1:
@@ -704,12 +734,25 @@ def _broader_search_term(search_term: str) -> str | None:
 
 
 def _jobspy_attempt_label(params: dict[str, Any]) -> str:
-    label = f"query `{params.get('search_term')}`"
+    label = f"for `{params.get('search_term')}`"
     if params.get("location"):
-        label += f" in `{params['location']}`"
-    if params.get("sites"):
-        label += f" on {', '.join(params['sites'])}"
+        label += f" in {params['location']}"
     return label
+
+
+def _jobspy_sites_label(sites: list[str] | str | None) -> str:
+    site_names = [sites] if isinstance(sites, str) else list(sites or [])
+    labels = {
+        "linkedin": "LinkedIn",
+        "indeed": "Indeed",
+        "google": "Google",
+        "glassdoor": "Glassdoor",
+        "zip_recruiter": "ZipRecruiter",
+        "bayt": "Bayt",
+        "bdjobs": "Bdjobs",
+        "naukri": "Naukri",
+    }
+    return ", ".join(labels.get(site, site.replace("_", " ").title()) for site in site_names) or "JobSpy"
 
 
 def _search_query(text: str) -> str:
@@ -735,6 +778,7 @@ def _merge_filters(text: str, filters: JobSearchFilters) -> JobSearchFilters:
         company=filters.company,
         seniority=filters.seniority or _first_seniority(normalized),
         remote_policy=filters.remote_policy or _first_remote_policy(normalized),
+        source=filters.source,
     )
 
 
@@ -837,6 +881,11 @@ _GENERIC_RELEVANCE_TERMS = {"developer", "engineer", "engineering", "software", 
 _SUPPORT_CONTEXT_TERMS = {"support engineer", "customer support", "technical support", "training", "trainer", "learning and development", "l&d"}
 _COUNTRY_ALIASES = {
     "canada": "Canada",
+    "calgary": "Canada",
+    "montreal": "Canada",
+    "ottawa": "Canada",
+    "toronto": "Canada",
+    "vancouver": "Canada",
     "france": "France",
     "germany": "Germany",
     "netherlands": "Netherlands",

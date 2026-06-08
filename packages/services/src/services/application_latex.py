@@ -1,7 +1,13 @@
 from __future__ import annotations
 
 import re
+import json
+import os
+import urllib.error
+import urllib.request
+from pathlib import Path
 from typing import Any, Callable
+from uuid import uuid4
 
 from db.candidate import CandidateRepository
 from db.jobs import JobRepository
@@ -10,6 +16,7 @@ from .application_materials import draft_tailored_cv
 
 
 DEFAULT_TEMPLATE_ID = "classic_cv"
+DEFAULT_LATEX_ENGINE = "pdflatex"
 
 
 class TailoredCVLatexTemplateError(ValueError):
@@ -43,14 +50,89 @@ def draft_tailored_cv_latex(
     candidate = CandidateRepository().get()
     context = _latex_context(draft=draft, job=job or {}, candidate=candidate or {})
     latex = _render_template(selected_template, context)
+    artifact = _validate_and_compile_latex(latex=latex, filename=_latex_filename(job=job or {}, candidate=candidate or {}))
     return {
-        "filename": _latex_filename(job=job or {}, candidate=candidate or {}),
+        "filename": artifact["filename"],
         "latex": latex,
         "template_id": selected_template,
         "warnings": [
             "Generated from retrieved candidate evidence. Review and compile externally before submitting.",
+            *artifact["warnings"],
         ],
+        "artifact_id": artifact["artifact_id"],
+        "validation": artifact["validation"],
+        "compile": artifact["compile"],
+        "compiled": artifact["compiled"],
+        "pdf_filename": artifact["pdf_filename"],
+        "pdf_available": artifact["pdf_available"],
     }
+
+
+def tailored_cv_latex_pdf_path(artifact_id: str) -> Path | None:
+    if not re.fullmatch(r"[a-f0-9-]{36}", artifact_id):
+        return None
+    artifact_dir = _latex_output_dir() / artifact_id
+    if not artifact_dir.exists():
+        return None
+    pdfs = sorted(path for path in artifact_dir.glob("*.pdf") if path.is_file())
+    return pdfs[0] if pdfs else None
+
+
+def _validate_and_compile_latex(*, latex: str, filename: str) -> dict[str, Any]:
+    artifact_id = str(uuid4())
+    artifact_dir = _latex_output_dir() / artifact_id
+    artifact_dir.mkdir(parents=True, exist_ok=True)
+    tex_path = artifact_dir / filename
+    tex_path.write_text(latex, encoding="utf-8")
+
+    relative_path = f"{artifact_id}/{filename}"
+    bridge_result, warning = _call_latex_bridge(relative_path)
+    warnings = [warning] if warning else []
+    validation = bridge_result.get("validation") if bridge_result else None
+    compile_result = bridge_result.get("compile") if bridge_result else None
+    compiled = bool(compile_result and compile_result.get("success"))
+    pdf_path = tex_path.with_suffix(".pdf")
+    return {
+        "artifact_id": artifact_id,
+        "filename": filename,
+        "warnings": warnings,
+        "validation": validation,
+        "compile": compile_result,
+        "compiled": compiled,
+        "pdf_filename": pdf_path.name if compiled else None,
+        "pdf_available": compiled and pdf_path.exists(),
+    }
+
+
+def _call_latex_bridge(relative_path: str) -> tuple[dict[str, Any] | None, str | None]:
+    bridge_url = os.environ.get("LATEX_BRIDGE_URL")
+    if not bridge_url:
+        return None, "LaTeX MCP bridge is not configured; skipped validation and PDF compilation."
+
+    payload = json.dumps(
+        {
+            "file_path": relative_path,
+            "engine": os.environ.get("LATEX_COMPILE_ENGINE") or DEFAULT_LATEX_ENGINE,
+        }
+    ).encode("utf-8")
+    request = urllib.request.Request(
+        f"{bridge_url.rstrip('/')}/validate-compile",
+        data=payload,
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=float(os.environ.get("LATEX_BRIDGE_TIMEOUT", "90"))) as response:
+            return json.loads(response.read().decode("utf-8")), None
+    except urllib.error.HTTPError as exc:
+        detail = exc.read().decode("utf-8", errors="replace")
+        return None, f"LaTeX MCP bridge failed with HTTP {exc.code}: {detail}"
+    except (OSError, TimeoutError, json.JSONDecodeError) as exc:
+        return None, f"LaTeX MCP bridge unavailable: {exc}"
+
+
+def _latex_output_dir() -> Path:
+    return Path(os.environ.get("LATEX_OUTPUT_DIR", "latex-output")).resolve()
 
 
 def _latex_context(*, draft: dict[str, Any], job: dict[str, Any], candidate: dict[str, Any]) -> dict[str, Any]:

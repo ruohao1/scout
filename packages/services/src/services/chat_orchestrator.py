@@ -387,6 +387,7 @@ def _filters(value: object, *, fallback: JobSearchFilters) -> JobSearchFilters:
         company=_string_arg(value.get("company")) or fallback.company,
         seniority=_string_arg(value.get("seniority")) or fallback.seniority,
         remote_policy=_string_arg(value.get("remote_policy")) or fallback.remote_policy,
+        source=_string_arg(value.get("source")) or fallback.source,
     )
 
 
@@ -423,6 +424,7 @@ def _jobspy_search_filters(*, filters: JobSearchFilters, location: str | None, i
         company=filters.company,
         seniority=filters.seniority,
         remote_policy="remote" if is_remote is True else filters.remote_policy,
+        source=filters.source,
     )
 
 

@@ -42,6 +42,7 @@ class JobSearchFilters:
     company: str | None = None
     seniority: str | None = None
     remote_policy: str | None = None
+    source: str | None = None
 
 
 @dataclass(frozen=True)

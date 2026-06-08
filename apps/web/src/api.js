@@ -107,6 +107,10 @@ export async function draftTailoredCvLatex(jobId, { targetProfileId = null, inst
   )
 }
 
+export function tailoredCvLatexPdfUrl(jobId, artifactId) {
+  return `${API_BASE_URL}/jobs/${jobId}/tailored-cv/latex/${artifactId}/pdf`
+}
+
 export async function listProfiles({ limit = 50 } = {}) {
   const params = new URLSearchParams({ limit: String(limit) })
   const response = await fetch(`${API_BASE_URL}/profiles?${params.toString()}`)

@@ -842,7 +842,8 @@ textarea {
   gap: 8px;
 }
 
-.tailored-cv-actions button {
+.tailored-cv-actions button,
+.tailored-cv-actions a {
   display: inline-flex;
   align-items: center;
   gap: 8px;
@@ -853,9 +854,11 @@ textarea {
   padding: 9px 12px;
   font-weight: 950;
   cursor: pointer;
+  text-decoration: none;
 }
 
 .tailored-cv-actions button svg,
+.tailored-cv-actions a svg,
 .tailored-cv-copy-status svg {
   width: 14px;
   height: 14px;
@@ -954,6 +957,40 @@ textarea {
   font-size: 0.78rem;
   font-weight: 800;
   line-height: 1.45;
+}
+
+.tailored-cv-pipeline-status {
+  display: grid;
+  gap: 7px;
+}
+
+.tailored-cv-pipeline-status span {
+  display: inline-flex;
+  width: fit-content;
+  border-radius: 999px;
+  padding: 5px 9px;
+  font-size: 0.76rem;
+  font-weight: 950;
+}
+
+.tailored-cv-pipeline-status .success-state {
+  background: rgba(49, 83, 63, 0.1);
+  color: var(--green);
+}
+
+.tailored-cv-pipeline-status .warning-state {
+  background: var(--warning-bg);
+  color: var(--warning);
+}
+
+.tailored-cv-pipeline-status ul {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding-left: 1.1rem;
+  color: var(--muted);
+  font-size: 0.8rem;
+  line-height: 1.4;
 }
 
 .tailored-cv-latex pre {

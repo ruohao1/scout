@@ -50,6 +50,7 @@ class JobSearchRepository:
                     AND (%(company)s::text IS NULL OR jobs.company ILIKE %(company_like)s)
                     AND (%(seniority)s::text IS NULL OR jobs.seniority = %(seniority)s)
                     AND (%(remote_policy)s::text IS NULL OR jobs.remote_policy = %(remote_policy)s)
+                    AND (%(source)s::text IS NULL OR jobs.source = %(source)s)
                 ORDER BY job_chunks.embedding <=> %(embedding)s::vector
                 LIMIT %(limit)s
                 """,
@@ -69,6 +70,7 @@ def _search_params(*, embedding: list[float], filters: JobSearchFilters, limit: 
         "company_like": _like(filters.company),
         "seniority": filters.seniority,
         "remote_policy": filters.remote_policy,
+        "source": filters.source,
     }
 
 
