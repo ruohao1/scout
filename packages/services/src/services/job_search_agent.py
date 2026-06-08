@@ -334,44 +334,69 @@ def _fetch_live_jobs(
 
     runtime = get_jobspy_runtime_settings()
     count = runtime.default_count
-    country_indeed = _jobspy_country(filters.location)
     sites = runtime.sites
-    params = {
-        "search_term": search_term,
-        "location": filters.location,
+    attempts = _jobspy_attempts(search_term=search_term, location=filters.location)
+    base_params = {
         "sites": sites,
         "count": count,
         "hours_old": None,
         "is_remote": filters.remote_policy == "remote" if filters.remote_policy else None,
         "job_type": _jobspy_job_type(filters.contract_type),
-        "country_indeed": country_indeed,
         "limit": limit,
     }
-    _emit({"type": "tool_started", "id": "fetch_jobspy_jobs", "tool": "fetch_jobspy_jobs", "args": {key: value for key, value in params.items() if value is not None}})
+    _emit(
+        {
+            "type": "tool_started",
+            "id": "fetch_jobspy_jobs",
+            "tool": "fetch_jobspy_jobs",
+            "args": {**{key: value for key, value in base_params.items() if value is not None}, "attempts": attempts},
+        }
+    )
     runs = ProviderImportRunRepository()
-    try:
-        result = (importer or import_jobs)(
-            client=JobSpyJobProviderClient(
-                site_name=sites,
-                search_term=search_term,
-                location=filters.location,
-                job_type=params["job_type"],
-                is_remote=params["is_remote"],
-                hours_old=params["hours_old"],
-                country_indeed=country_indeed,
-            ),
-            adapter=JobSpyJobProviderAdapter(),
-            count=count,
-            should_index=True,
-        )
-    except Exception as exc:
-        _record_jobspy_run(runs, params=params, created=0, skipped=0, indexed=0, status="failed", error=str(exc))
-        _emit({"type": "tool_failed", "id": "fetch_jobspy_jobs", "summary": str(exc)})
-        return {"ok": False, "warnings": [f"JobSpy live search failed: {exc}"]}
+    total_created = 0
+    total_skipped = 0
+    total_indexed = 0
+    attempted_labels: list[str] = []
+    warnings: list[str] = []
 
-    _record_jobspy_run(runs, params=params, created=len(result.created), skipped=result.skipped, indexed=result.indexed, status="completed", error=None)
-    _emit({"type": "tool_completed", "id": "fetch_jobspy_jobs", "summary": f"Imported {len(result.created)} jobs and indexed {result.indexed}"})
-    return {"ok": True, "created": len(result.created), "skipped": result.skipped, "indexed": result.indexed, "warnings": []}
+    for index, attempt in enumerate(attempts):
+        country_indeed = _jobspy_country(attempt.get("location"))
+        params = {**base_params, **attempt, "country_indeed": country_indeed}
+        attempted_labels.append(_jobspy_attempt_label(params))
+        try:
+            result = (importer or import_jobs)(
+                client=JobSpyJobProviderClient(
+                    site_name=sites,
+                    search_term=str(attempt["search_term"]),
+                    location=attempt.get("location"),
+                    job_type=base_params["job_type"],
+                    is_remote=base_params["is_remote"],
+                    hours_old=base_params["hours_old"],
+                    country_indeed=country_indeed,
+                ),
+                adapter=JobSpyJobProviderAdapter(),
+                count=count,
+                should_index=True,
+            )
+        except Exception as exc:
+            _record_jobspy_run(runs, params=params, created=0, skipped=0, indexed=0, status="failed", error=str(exc))
+            _emit({"type": "tool_failed", "id": "fetch_jobspy_jobs", "summary": str(exc)})
+            return {"ok": False, "warnings": [f"JobSpy live search failed for {_jobspy_attempt_label(params)}: {exc}"]}
+
+        created = len(result.created)
+        total_created += created
+        total_skipped += result.skipped
+        total_indexed += result.indexed
+        _record_jobspy_run(runs, params=params, created=created, skipped=result.skipped, indexed=result.indexed, status="completed", error=None)
+        if created or result.skipped:
+            break
+        if index < len(attempts) - 1:
+            warnings.append(f"JobSpy returned 0 jobs for {_jobspy_attempt_label(params)}; retrying broader search.")
+
+    if total_created == 0 and total_skipped == 0:
+        warnings.append(f"JobSpy returned 0 jobs after trying: {'; '.join(attempted_labels)}.")
+    _emit({"type": "tool_completed", "id": "fetch_jobspy_jobs", "summary": f"Imported {total_created} jobs and indexed {total_indexed}"})
+    return {"ok": True, "created": total_created, "skipped": total_skipped, "indexed": total_indexed, "warnings": warnings, "attempts": attempted_labels}
 
 
 def _chat_result_from_local(
@@ -403,6 +428,8 @@ def _chat_result_from_local(
             message += f" I also fetched **{created} live {_plural(created, 'job')}** with JobSpy and indexed **{indexed}** before refreshing results."
         else:
             message += " I also checked JobSpy for live offers, but it did not return new relevant jobs to index."
+    elif fetched_live and created:
+        message += f" I fetched **{created} live {_plural(created, 'job')}** with JobSpy and indexed **{indexed}**, but none matched the current filters/profile strongly enough after refreshing the search."
 
     return ChatResult(message=message, tool=str(local.get("tool") or "job_search_agent"), jobs=jobs, ranked_jobs=ranked_jobs, warnings=result_warnings)
 
@@ -425,6 +452,8 @@ def _empty_search_message(
             "Import provider jobs, then refresh the Jobs page.",
             "Check `/settings` if the enabled JobSpy sites are too narrow.",
         ]
+        if location and _jobspy_country(location) is None:
+            suggestions.insert(1, f"Include the country for live search: `search latest {_without_location(query)} in {location} <country>`")
     else:
         message = "I did not find enough relevant jobs for this search."
         suggestions = []
@@ -593,9 +622,11 @@ def _relevance_terms_ordered(text: str) -> list[str]:
         "latest",
         "list",
         "live",
+        "match",
         "matching",
         "me",
         "more",
+        "my",
         "new",
         "offer",
         "offers",
@@ -603,10 +634,12 @@ def _relevance_terms_ordered(text: str) -> list[str]:
         "opportunities",
         "opportunity",
         "please",
+        "profile",
         "role",
         "roles",
         "search",
         "show",
+        "that",
         "the",
         "to",
     }
@@ -631,11 +664,17 @@ def _wants_live_jobs(text: str) -> bool:
 
 
 def _jobspy_search_term(text: str, *, target_profile_id: str | None) -> str | None:
+    if _looks_like_profile_match(text) and target_profile_id:
+        return _target_profile_search_term(target_profile_id)
     query = _role_search_query(text)
     if query and query.lower() not in {"job", "jobs", "role", "roles", "offer", "offers"}:
         return query
     if not target_profile_id:
         return None
+    return _target_profile_search_term(target_profile_id)
+
+
+def _target_profile_search_term(target_profile_id: str) -> str | None:
     profile = get_target_profile_with_evidence(target_profile_id)
     if not profile:
         raise TargetProfileNotFoundError(f"Target profile not found: {target_profile_id}")
@@ -646,6 +685,33 @@ def _jobspy_search_term(text: str, *, target_profile_id: str | None) -> str | No
     return name.strip() if isinstance(name, str) and name.strip() else None
 
 
+def _jobspy_attempts(*, search_term: str, location: str | None) -> list[dict[str, str | None]]:
+    attempts = [{"search_term": search_term, "location": location}]
+    broader_term = _broader_search_term(search_term)
+    if broader_term and broader_term.lower() != search_term.lower():
+        attempts.append({"search_term": broader_term, "location": location})
+    if location:
+        for term in (search_term, broader_term):
+            if term and not any(attempt["search_term"] == term and attempt["location"] is None for attempt in attempts):
+                attempts.append({"search_term": term, "location": None})
+    return attempts[:4]
+
+
+def _broader_search_term(search_term: str) -> str | None:
+    broader = re.sub(r"\b(internship|intern|junior|entry-level|entry level|graduate|senior|lead|principal|staff)\b", " ", search_term, flags=re.IGNORECASE)
+    broader = re.sub(r"\s+", " ", broader).strip()
+    return broader or None
+
+
+def _jobspy_attempt_label(params: dict[str, Any]) -> str:
+    label = f"query `{params.get('search_term')}`"
+    if params.get("location"):
+        label += f" in `{params['location']}`"
+    if params.get("sites"):
+        label += f" on {', '.join(params['sites'])}"
+    return label
+
+
 def _search_query(text: str) -> str:
     query = re.sub(r"\b(fetch|find|search|show|get|list|jobs?|roles?|offers?)\b", " ", text, flags=re.IGNORECASE)
     query = re.sub(r"\s+", " ", query).strip()
@@ -654,6 +720,10 @@ def _search_query(text: str) -> str:
 
 def _role_search_query(text: str) -> str | None:
     terms = _relevance_terms_ordered(text)
+    location = _first_location(text.lower())
+    if location:
+        location_terms = set(_normalized_text(location).split())
+        terms = [term for term in terms if term not in location_terms]
     return " ".join(terms) if terms else None
 
 

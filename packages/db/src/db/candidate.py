@@ -358,6 +358,39 @@ class CandidateEvidenceChunkRepository:
             ).fetchall()
         return [dict(row) for row in rows]
 
+    def search_chunks(self, *, embedding: list[float], limit: int = 8) -> list[dict[str, Any]]:
+        with psycopg.connect(self.url, row_factory=dict_row) as conn:
+            rows = conn.execute(
+                f"""
+                SELECT
+                    candidate_evidence_chunks.id,
+                    candidate_evidence_chunks.evidence_id,
+                    candidate_evidence_chunks.chunk_index,
+                    candidate_evidence_chunks.content,
+                    candidate_evidence_chunks.metadata,
+                    1 - (candidate_evidence_chunks.embedding <=> %(embedding)s::vector) AS score,
+                    candidate_evidence.type AS evidence_type,
+                    candidate_evidence.title AS evidence_title,
+                    candidate_evidence.organization AS evidence_organization,
+                    candidate_evidence.location AS evidence_location,
+                    candidate_evidence.start_date AS evidence_start_date,
+                    candidate_evidence.end_date AS evidence_end_date,
+                    candidate_evidence.is_current AS evidence_is_current,
+                    candidate_evidence.description AS evidence_description,
+                    candidate_evidence.skills AS evidence_skills,
+                    candidate_evidence.url AS evidence_url,
+                    candidate_evidence.source_document_id AS evidence_source_document_id,
+                    candidate_evidence.confidence AS evidence_confidence
+                FROM candidate_evidence_chunks
+                JOIN candidate_evidence ON candidate_evidence.id = candidate_evidence_chunks.evidence_id
+                WHERE candidate_evidence_chunks.embedding IS NOT NULL
+                ORDER BY candidate_evidence_chunks.embedding <=> %(embedding)s::vector
+                LIMIT %(limit)s
+                """,
+                {"embedding": _vector_literal(embedding), "limit": limit},
+            ).fetchall()
+        return [dict(row) for row in rows]
+
 
 def _candidate_params(candidate: dict[str, Any], *, existing: dict[str, Any] | None) -> dict[str, Any]:
     return {

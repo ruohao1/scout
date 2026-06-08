@@ -58,6 +58,56 @@ class JobIndexResult(BaseModel):
     chunks_indexed: int
 
 
+class JobDescriptionRefreshRead(BaseModel):
+    job: JobRead
+    refreshed: bool
+    description_length: int
+
+
+class TailoredCVRequest(BaseModel):
+    target_profile_id: UUID | None = None
+    instruction: str | None = None
+    evidence_limit: int = Field(default=8, ge=1, le=16)
+
+
+class TailoredCVBullet(BaseModel):
+    text: str
+    evidence_ids: list[str] = Field(default_factory=list)
+
+
+class TailoredCVEvidence(BaseModel):
+    evidence_id: UUID
+    type: str | None = None
+    title: str | None = None
+    organization: str | None = None
+    location: str | None = None
+    start_date: str | None = None
+    end_date: str | None = None
+    is_current: bool | None = None
+    description: str | None = None
+    skills: list[str] = Field(default_factory=list)
+    url: str | None = None
+    confidence: float | None = None
+    reason: str | None = None
+
+
+class RetrievedCandidateEvidence(TailoredCVEvidence):
+    chunk_id: UUID
+    content: str
+    score: float
+
+
+class TailoredCVRead(BaseModel):
+    job_id: UUID
+    target_profile_id: UUID | None = None
+    headline: str
+    summary: str
+    bullets: list[TailoredCVBullet]
+    evidence_used: list[TailoredCVEvidence]
+    gaps_or_cautions: list[str] = Field(default_factory=list)
+    retrieved_evidence: list[RetrievedCandidateEvidence]
+
+
 class AdzunaImportRequest(BaseModel):
     country: str = "gb"
     what: str | None = None

@@ -222,30 +222,17 @@ textarea {
   min-height: 100svh;
 }
 
-.chat-panel-with-job {
-  grid-template-columns: minmax(0, 1fr) minmax(340px, 42vw);
-  grid-template-rows: minmax(0, 1fr);
-}
-
-.chat-panel-with-job .chat-conversation-column {
+.chat-workspace .workspace-shell-main,
+.chat-workspace .chat-conversation-column {
   min-width: 0;
 }
 
-.chat-job-pane {
-  position: sticky;
-  top: 0;
-  height: 100svh;
-  min-width: 0;
-  border-left: 1px solid rgba(49, 83, 63, 0.14);
-  background: rgba(255, 254, 251, 0.78);
-}
-
-.chat-job-pane .job-detail-pane {
+.chat-workspace .workspace-shell-aside .job-detail-pane {
   min-height: 100svh;
-  background: linear-gradient(90deg, rgba(246, 249, 243, 0.72), rgba(255, 254, 251, 0.92));
+  background: transparent;
 }
 
-.chat-job-pane .job-detail-scroll {
+.chat-workspace .workspace-shell-aside .job-detail-scroll {
   max-height: 100svh;
   padding-top: 58px;
 }
@@ -261,6 +248,11 @@ textarea {
   box-shadow: 0 18px 44px rgba(47, 66, 52, 0.12);
   cursor: pointer;
   transition: transform 180ms ease, border-color 180ms ease, background 180ms ease;
+}
+
+.chat-job-pane-content {
+  position: relative;
+  min-height: 100svh;
 }
 
 .chat-job-close:hover,
@@ -293,6 +285,53 @@ textarea {
   min-height: 100svh;
   place-items: center;
   padding: 24px;
+}
+
+.workspace-page:has(.workspace-shell[data-right-open='true']) {
+  place-items: stretch;
+  padding: 0;
+}
+
+.workspace-shell {
+  width: 100%;
+  min-height: 100svh;
+}
+
+.workspace-shell[data-right-open='false'] {
+  display: block;
+}
+
+.workspace-shell[data-right-open='true'] {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(340px, 40vw);
+  gap: 0;
+}
+
+.workspace-shell-main,
+.workspace-shell-aside {
+  min-width: 0;
+}
+
+.workspace-shell-aside {
+  position: sticky;
+  top: 0;
+  height: 100svh;
+  border-left: 1px solid rgba(49, 83, 63, 0.15);
+  overflow: hidden;
+}
+
+.workspace-shell[data-tone='draft'] .workspace-shell-aside {
+  background:
+    radial-gradient(circle at top right, rgba(211, 228, 202, 0.38), transparent 24rem),
+    linear-gradient(180deg, rgba(244, 248, 239, 0.88), rgba(238, 244, 232, 0.78));
+}
+
+.workspace-shell[data-tone='detail'] .workspace-shell-aside {
+  background: linear-gradient(90deg, rgba(246, 249, 243, 0.72), rgba(255, 254, 251, 0.92));
+}
+
+.workspace-shell[data-tone='neutral'] .workspace-shell-aside {
+  background: rgba(255, 254, 251, 0.78);
 }
 
 .workspace-card {
@@ -359,6 +398,16 @@ textarea {
 .jobs-view-detail {
   width: min(920px, 100%);
   padding: clamp(24px, 4vw, 44px) 20px;
+}
+
+.jobs-workspace[data-right-open='true'] .job-detail-pane {
+  min-height: 100svh;
+  background: transparent;
+}
+
+.jobs-workspace[data-right-open='true'] .job-detail-scroll {
+  max-height: 100svh;
+  padding: 58px clamp(20px, 4vw, 58px) 32px;
 }
 
 .jobs-header {
@@ -559,9 +608,35 @@ textarea {
   text-decoration: none;
 }
 
+.job-detail-action-button {
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+}
+
+.job-detail-action-button:disabled {
+  cursor: wait;
+  opacity: 0.66;
+}
+
 .job-detail-link svg {
   width: 15px;
   height: 15px;
+}
+
+.job-detail-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+}
+
+.job-detail-refresh-error {
+  border-top: 1px solid rgba(138, 93, 47, 0.26);
+  background: rgba(255, 247, 236, 0.7);
+  color: var(--warning);
+  padding: 12px 0 0;
+  font-size: 0.9rem;
+  font-weight: 800;
 }
 
 .job-detail-section {
@@ -667,6 +742,194 @@ textarea {
   padding: 9px 13px;
   font-weight: 900;
   cursor: pointer;
+}
+
+.tailored-cv-pane {
+  min-height: 100svh;
+  min-width: 0;
+  background: transparent;
+}
+
+.tailored-cv-scroll {
+  display: grid;
+  gap: 18px;
+  max-height: 100svh;
+  overflow: auto;
+  padding: 58px clamp(18px, 3vw, 34px) 32px;
+}
+
+.tailored-cv-header {
+  display: grid;
+  gap: 8px;
+  border-bottom: 1px solid rgba(49, 83, 63, 0.16);
+  padding-bottom: 18px;
+}
+
+.tailored-cv-header p,
+.tailored-cv-section p,
+.tailored-cv-control label span {
+  margin: 0;
+  color: var(--green);
+  font-size: 0.68rem;
+  font-weight: 950;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.tailored-cv-header h2 {
+  margin: 0;
+  color: var(--foreground);
+  font-size: clamp(1.8rem, 3vw, 2.7rem);
+  font-weight: 950;
+  letter-spacing: -0.07em;
+  line-height: 0.96;
+}
+
+.tailored-cv-header span,
+.tailored-cv-section span,
+.tailored-cv-empty span,
+.tailored-cv-alert span {
+  color: var(--muted);
+  font-size: 0.92rem;
+  line-height: 1.55;
+}
+
+.tailored-cv-control {
+  display: grid;
+  gap: 12px;
+}
+
+.tailored-cv-control label {
+  display: grid;
+  gap: 8px;
+}
+
+.tailored-cv-control textarea {
+  width: 100%;
+  resize: vertical;
+  border: 1px solid rgba(49, 83, 63, 0.16);
+  border-radius: 1rem;
+  background: rgba(255, 254, 251, 0.86);
+  color: var(--foreground);
+  padding: 12px 14px;
+  line-height: 1.45;
+  outline: none;
+}
+
+.tailored-cv-control textarea:focus {
+  border-color: rgba(49, 83, 63, 0.5);
+  box-shadow: 0 0 0 3px rgba(49, 83, 63, 0.08);
+}
+
+.tailored-cv-control button {
+  display: inline-flex;
+  width: fit-content;
+  align-items: center;
+  gap: 8px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--green);
+  color: #fff;
+  padding: 11px 15px;
+  font-weight: 950;
+  cursor: pointer;
+  box-shadow: 0 14px 34px rgba(49, 83, 63, 0.16);
+}
+
+.tailored-cv-control button:disabled {
+  cursor: not-allowed;
+  opacity: 0.65;
+}
+
+.tailored-cv-control button svg {
+  width: 15px;
+  height: 15px;
+}
+
+.tailored-cv-alert,
+.tailored-cv-empty,
+.tailored-cv-section,
+.tailored-cv-evidence {
+  border-top: 1px solid rgba(49, 83, 63, 0.14);
+  padding-top: 18px;
+}
+
+.tailored-cv-alert {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 10px;
+}
+
+.tailored-cv-alert svg,
+.tailored-cv-empty svg {
+  width: 18px;
+  height: 18px;
+  color: var(--green);
+}
+
+.tailored-cv-alert strong,
+.tailored-cv-empty strong,
+.tailored-cv-evidence strong {
+  display: block;
+  color: var(--foreground);
+  font-weight: 950;
+}
+
+.tailored-cv-empty,
+.tailored-cv-section,
+.tailored-cv-result {
+  display: grid;
+  gap: 12px;
+}
+
+.tailored-cv-section h3 {
+  margin: 0;
+  color: var(--foreground);
+  font-size: 1.15rem;
+  font-weight: 950;
+  letter-spacing: -0.04em;
+  line-height: 1.1;
+}
+
+.tailored-cv-bullets,
+.tailored-cv-cautions {
+  display: grid;
+  gap: 12px;
+  margin: 0;
+  padding-left: 1.25rem;
+}
+
+.tailored-cv-bullets li,
+.tailored-cv-cautions li {
+  color: #2f4137;
+  line-height: 1.55;
+}
+
+.tailored-cv-bullets li::marker {
+  color: var(--green);
+  font-weight: 950;
+}
+
+.tailored-cv-bullets small,
+.tailored-cv-evidence small {
+  display: block;
+  margin-top: 5px;
+  color: var(--muted-soft);
+  font-size: 0.78rem;
+  font-weight: 800;
+  line-height: 1.45;
+}
+
+.tailored-cv-evidence-list {
+  display: grid;
+  gap: 10px;
+}
+
+.tailored-cv-evidence span {
+  display: block;
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: 0.84rem;
 }
 
 .settings-view {
@@ -3072,6 +3335,17 @@ textarea {
     padding: 20px 14px 28px;
   }
 
+  .workspace-shell[data-right-open='true'] {
+    grid-template-columns: 1fr;
+  }
+
+  .workspace-shell-aside {
+    position: static;
+    height: auto;
+    border-left: 0;
+    border-top: 1px solid rgba(49, 83, 63, 0.14);
+  }
+
   .job-detail-pane {
     min-height: auto;
     background: transparent;
@@ -3081,6 +3355,24 @@ textarea {
   .job-detail-empty {
     max-height: none;
     min-height: auto;
+  }
+
+  .jobs-workspace[data-right-open='true'] .job-detail-pane {
+    min-height: auto;
+  }
+
+  .jobs-workspace[data-right-open='true'] .job-detail-scroll {
+    max-height: none;
+    padding: 70px 14px 28px;
+  }
+
+  .tailored-cv-pane {
+    min-height: auto;
+  }
+
+  .tailored-cv-scroll {
+    max-height: none;
+    padding: 28px 14px;
   }
 
   .job-detail-fact {
@@ -3122,23 +3414,12 @@ textarea {
     max-width: 82%;
   }
 
-  .chat-panel-with-job {
-    grid-template-columns: 1fr;
-  }
-
-  .chat-job-pane {
-    position: static;
-    height: auto;
-    border-left: 0;
-    border-top: 1px solid rgba(49, 83, 63, 0.14);
-  }
-
-  .chat-job-pane .job-detail-pane {
+  .chat-workspace .workspace-shell-aside .job-detail-pane {
     min-height: auto;
     background: transparent;
   }
 
-  .chat-job-pane .job-detail-scroll {
+  .chat-workspace .workspace-shell-aside .job-detail-scroll {
     max-height: none;
     padding-top: 70px;
   }

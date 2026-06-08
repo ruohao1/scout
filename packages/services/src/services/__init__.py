@@ -6,8 +6,16 @@ from .candidate_documents import upload_candidate_cv
 from .candidate_indexing import CandidateEvidenceNotFoundError, index_candidate_evidence, reindex_all_candidate_evidence
 from .candidate_migration import LegacyProfileNotFoundError, migrate_profiles_to_candidate
 from .candidate_seed import CandidateSeedFixtureError, seed_fake_candidate
+from .application_materials import CandidateEvidenceUnavailableError, JobForApplicationNotFoundError, TailoredCVGenerationError, draft_tailored_cv
 from .job_explanations import ExplanationParseError, explain_ranked_jobs
 from .job_corpus import JobCorpusStatus, get_job_corpus_status
+from .job_description_refresh import (
+    JobDescriptionRefreshError,
+    JobDescriptionRefreshNotFoundError,
+    JobDescriptionUnavailableError,
+    has_weak_job_description,
+    refresh_job_description,
+)
 from .job_indexing import JobNotFoundError, index_job
 from .job_providers import (
     AdzunaJobProviderAdapter,
@@ -40,15 +48,20 @@ __all__ = [
     "ChatResult",
     "ChatRoute",
     "CandidateEvidenceNotFoundError",
+    "CandidateEvidenceUnavailableError",
     "CandidateSeedFixtureError",
     "EmptyCVError",
     "EmptySearchQueryError",
     "ExplanationParseError",
     "InvalidCVFileError",
     "JobCorpusStatus",
+    "JobDescriptionRefreshError",
+    "JobDescriptionRefreshNotFoundError",
+    "JobDescriptionUnavailableError",
     "JobImportResult",
     "JobSpyJobProviderAdapter",
     "JobSpyJobProviderClient",
+    "JobForApplicationNotFoundError",
     "LegacyProfileNotFoundError",
     "JobNotFoundError",
     "ProfileNotFoundError",
@@ -56,8 +69,10 @@ __all__ = [
     "TargetProfileSuggestionError",
     "TargetProfileSuggestionProvider",
     "TargetProfileNotFoundError",
+    "TailoredCVGenerationError",
     "UnsupportedCVFileError",
     "create_target_profile",
+    "draft_tailored_cv",
     "explain_ranked_jobs",
     "extract_cv_text",
     "extract_job_skills",
@@ -66,6 +81,7 @@ __all__ = [
     "get_jobspy_runtime_settings",
     "get_runtime_settings",
     "get_target_profile_with_evidence",
+    "has_weak_job_description",
     "enrich_job_skills",
     "import_jobs",
     "jobspy_sites",
@@ -80,6 +96,7 @@ __all__ = [
     "respond_to_chat_with_tools",
     "respond_to_job_search_agent",
     "reindex_all_candidate_evidence",
+    "refresh_job_description",
     "route_chat_request",
     "route_chat_request_fallback",
     "search_jobs",

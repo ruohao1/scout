@@ -9,6 +9,7 @@ import {
   listTargetProfiles,
   listJobs,
   rankJobsForTargetProfile,
+  refreshJobDescription,
   sendChatMessageStream,
 } from './api.js'
 import { applyChatStreamEvent, failRunningActivities } from './features/chat/chatStreamReducer.js'
@@ -103,9 +104,10 @@ function App() {
   const location = useLocation()
   const navigate = useNavigate()
   const selectedJobId = selectedJobIdFromPath(location.pathname)
+  const selectedTailoredCvJobId = selectedTailoredCvJobIdFromPath(location.pathname)
   const selectedChatJobId = selectedChatJobIdFromPath(location.pathname)
-  const selectedDetailJobId = selectedJobId || selectedChatJobId
-  const activeView = selectedChatJobId ? 'chat' : selectedJobId ? 'jobs' : viewByRoute[location.pathname] || 'chat'
+  const selectedDetailJobId = selectedTailoredCvJobId || selectedJobId || selectedChatJobId
+  const activeView = selectedChatJobId ? 'chat' : (selectedJobId || selectedTailoredCvJobId) ? 'jobs' : viewByRoute[location.pathname] || 'chat'
   const [threads, setThreads] = useState(() => {
     const stored = readStoredJson(STORAGE_KEYS.threads, initialThreads)
     return validStoredThreads(stored) ? stored : initialThreads
@@ -120,7 +122,9 @@ function App() {
   const [hasLoadedJobs, setHasLoadedJobs] = useState(false)
   const [selectedJob, setSelectedJob] = useState(null)
   const [isLoadingSelectedJob, setIsLoadingSelectedJob] = useState(false)
+  const [isRefreshingDescription, setIsRefreshingDescription] = useState(false)
   const [selectedJobError, setSelectedJobError] = useState('')
+  const [descriptionRefreshError, setDescriptionRefreshError] = useState('')
   const [profiles, setProfiles] = useState([])
   const [selectedProfileId, setSelectedProfileId] = useState(() => readStoredString(STORAGE_KEYS.selectedProfileId, null))
   const [isLoadingProfiles, setIsLoadingProfiles] = useState(false)
@@ -167,7 +171,7 @@ function App() {
       navigate('/candidate', { replace: true })
       return
     }
-    if (!viewByRoute[location.pathname] && !selectedJobIdFromPath(location.pathname) && !selectedChatJobIdFromPath(location.pathname)) {
+    if (!viewByRoute[location.pathname] && !selectedJobIdFromPath(location.pathname) && !selectedTailoredCvJobIdFromPath(location.pathname) && !selectedChatJobIdFromPath(location.pathname)) {
       navigate('/chat', { replace: true })
     }
   }, [location.pathname, navigate])
@@ -188,13 +192,14 @@ function App() {
     if (!selectedDetailJobId) {
       setSelectedJob(null)
       setSelectedJobError('')
+      setDescriptionRefreshError('')
       return
     }
 
     const routeStateJob = location.state?.job && (location.state.job.id === selectedDetailJobId || location.state.job.job_id === selectedDetailJobId) ? location.state.job : null
     const listedJob = jobs.find((job) => job.id === selectedDetailJobId)
     if (listedJob) {
-      setSelectedJob(routeStateJob ? { ...listedJob, ...routeStateJob } : listedJob)
+      setSelectedJob(routeStateJob ? { ...routeStateJob, ...listedJob } : listedJob)
       setSelectedJobError('')
       return
     }
@@ -207,10 +212,10 @@ function App() {
   }, [selectedDetailJobId, jobs, location.state])
 
   useEffect(() => {
-    if ((activeView === 'targetProfiles' || activeView === 'matches' || activeView === 'chat') && !hasLoadedProfiles && !isLoadingProfiles) {
+    if ((activeView === 'targetProfiles' || activeView === 'matches' || activeView === 'chat' || selectedTailoredCvJobId) && !hasLoadedProfiles && !isLoadingProfiles) {
       loadProfiles()
     }
-  }, [activeView, hasLoadedProfiles, isLoadingProfiles])
+  }, [activeView, selectedTailoredCvJobId, hasLoadedProfiles, isLoadingProfiles])
 
   useEffect(() => {
     if (activeView === 'matches' && hasLoadedProfiles && !selectedProfileExists) {
@@ -410,14 +415,30 @@ function App() {
     if (!jobId) return
     setIsLoadingSelectedJob(true)
     setSelectedJobError('')
+    setDescriptionRefreshError('')
     try {
       const loadedJob = await getJob(jobId)
-      setSelectedJob(contextJob ? { ...loadedJob, ...contextJob } : loadedJob)
+      setSelectedJob(contextJob ? { ...contextJob, ...loadedJob } : loadedJob)
     } catch (error) {
       setSelectedJob(null)
       setSelectedJobError(error.message)
     } finally {
       setIsLoadingSelectedJob(false)
+    }
+  }
+
+  async function refreshSelectedJobDescription(jobId = selectedDetailJobId) {
+    if (!jobId || isRefreshingDescription) return
+    setIsRefreshingDescription(true)
+    setDescriptionRefreshError('')
+    try {
+      const result = await refreshJobDescription(jobId)
+      setSelectedJob(result.job)
+      setJobs((current) => current.map((job) => (job.id === jobId ? { ...job, ...result.job } : job)))
+    } catch (error) {
+      setDescriptionRefreshError(error.message)
+    } finally {
+      setIsRefreshingDescription(false)
     }
   }
 
@@ -462,7 +483,7 @@ function App() {
   return (
     <TooltipProvider>
       <SidebarProvider
-        open={(activeView === 'chat' || (activeView === 'jobs' && selectedJobId) || activeView === 'targetProfiles' || activeView === 'matches') && isContextPanelOpen}
+        open={(activeView === 'chat' || (activeView === 'jobs' && selectedDetailJobId) || activeView === 'targetProfiles' || activeView === 'matches') && isContextPanelOpen}
         onOpenChange={setIsContextPanelOpen}
         style={{
           '--sidebar-width': '22rem',
@@ -474,7 +495,7 @@ function App() {
           threads={threads}
           activeThreadId={activeThreadId}
           jobs={jobs}
-          selectedJobId={selectedJobId}
+          selectedJobId={selectedDetailJobId}
           isLoadingJobs={isLoadingJobs}
           profiles={profiles}
           selectedProfileId={selectedProfileId}
@@ -502,6 +523,7 @@ function App() {
                 isJobPaneOpen={Boolean(selectedChatJobId && !isContextPanelOpen)}
                 isLoadingSelectedJob={isLoadingSelectedJob}
                 selectedJobError={selectedJobError}
+                descriptionRefreshError={descriptionRefreshError}
                 onDraftChange={setDraft}
                 onSubmit={submitMessage}
                 onShowJobPane={() => setIsContextPanelOpen(false)}
@@ -510,9 +532,11 @@ function App() {
                   setIsContextPanelOpen(false)
                 }}
                 onRefreshSelectedJob={() => loadSelectedJob(selectedChatJobId)}
+                onRefreshDescription={() => refreshSelectedJobDescription(selectedChatJobId)}
+                isRefreshingDescription={isRefreshingDescription}
               />
             )}
-            {(activeView === 'chat' || (activeView === 'jobs' && selectedJobId) || activeView === 'targetProfiles' || activeView === 'matches') && (
+            {(activeView === 'chat' || (activeView === 'jobs' && selectedDetailJobId) || activeView === 'targetProfiles' || activeView === 'matches') && (
               <button
                 className="chat-context-toggle"
                 type="button"
@@ -523,7 +547,7 @@ function App() {
                 {isContextPanelOpen ? <PanelLeftCloseIcon className="size-4" /> : <PanelLeftOpenIcon className="size-4" />}
               </button>
             )}
-            {activeView === 'jobs' && <JobsView jobs={jobs} selectedJob={selectedJob} selectedJobId={selectedJobId} isLoading={isLoadingJobs} isLoadingSelectedJob={isLoadingSelectedJob} error={jobsError} selectedJobError={selectedJobError} onRefresh={loadJobs} onRefreshSelectedJob={() => loadSelectedJob(selectedJobId)} />}
+            {activeView === 'jobs' && <JobsView jobs={jobs} selectedJob={selectedJob} selectedJobId={selectedDetailJobId} isTailoringCv={Boolean(selectedTailoredCvJobId)} selectedProfile={selectedProfile} isLoading={isLoadingJobs} isLoadingSelectedJob={isLoadingSelectedJob} isRefreshingDescription={isRefreshingDescription} error={jobsError} selectedJobError={selectedJobError} descriptionRefreshError={descriptionRefreshError} onRefresh={loadJobs} onRefreshSelectedJob={() => loadSelectedJob(selectedDetailJobId)} onRefreshDescription={() => refreshSelectedJobDescription(selectedDetailJobId)} />}
             {activeView === 'candidate' && <CandidateView />}
             {activeView === 'settings' && <SettingsView />}
             {activeView === 'targetProfiles' && (
@@ -549,6 +573,11 @@ function App() {
 
 function selectedJobIdFromPath(pathname) {
   const match = pathname.match(/^\/jobs\/([^/]+)$/)
+  return match ? decodeURIComponent(match[1]) : null
+}
+
+function selectedTailoredCvJobIdFromPath(pathname) {
+  const match = pathname.match(/^\/jobs\/([^/]+)\/tailor-cv$/)
   return match ? decodeURIComponent(match[1]) : null
 }
 

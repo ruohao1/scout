@@ -80,6 +80,23 @@ export async function getJob(jobId) {
   return response.json()
 }
 
+export async function draftTailoredCv(jobId, { targetProfileId = null, instruction = '', evidenceLimit = 8 } = {}) {
+  return jsonRequest(
+    `/jobs/${jobId}/tailored-cv`,
+    'POST',
+    {
+      target_profile_id: targetProfileId,
+      instruction: instruction || null,
+      evidence_limit: evidenceLimit,
+    },
+    'Tailored CV draft failed',
+  )
+}
+
+export async function refreshJobDescription(jobId) {
+  return jsonRequest(`/jobs/${jobId}/refresh-description`, 'POST', {}, 'Job description refresh failed')
+}
+
 export async function listProfiles({ limit = 50 } = {}) {
   const params = new URLSearchParams({ limit: String(limit) })
   const response = await fetch(`${API_BASE_URL}/profiles?${params.toString()}`)

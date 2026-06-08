@@ -132,3 +132,37 @@ class JobRepository:
                 {"job_id": job_id},
             ).fetchone()
         return dict(row) if row is not None else None
+
+    def update_description(
+        self,
+        job_id: str,
+        *,
+        description: str,
+        skills: list[str],
+        seniority: str | None,
+        remote_policy: str | None,
+        raw_payload: dict[str, Any],
+    ) -> dict[str, Any] | None:
+        with psycopg.connect(self.url, row_factory=dict_row) as conn:
+            row = conn.execute(
+                f"""
+                UPDATE jobs
+                SET description = %(description)s,
+                    skills = %(skills)s,
+                    seniority = %(seniority)s,
+                    remote_policy = %(remote_policy)s,
+                    raw_payload = %(raw_payload)s,
+                    updated_at = now()
+                WHERE id = %(job_id)s
+                RETURNING {JOB_COLUMNS}
+                """,
+                {
+                    "job_id": job_id,
+                    "description": description,
+                    "skills": skills,
+                    "seniority": seniority,
+                    "remote_policy": remote_policy,
+                    "raw_payload": Jsonb(raw_payload),
+                },
+            ).fetchone()
+        return dict(row) if row is not None else None
