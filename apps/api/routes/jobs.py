@@ -5,8 +5,9 @@ from uuid import UUID
 from fastapi import APIRouter, HTTPException, Query
 from psycopg.errors import UniqueViolation
 
-from apps.api.schemas import JobCreate, JobDescriptionRefreshRead, JobIndexResult, JobRead, TailoredCVRead, TailoredCVRequest
+from apps.api.schemas import JobCreate, JobDescriptionRefreshRead, JobIndexResult, JobRead, TailoredCVLatexRead, TailoredCVLatexRequest, TailoredCVRead, TailoredCVRequest
 from db.jobs import JobRepository
+from services.application_latex import TailoredCVLatexTemplateError, draft_tailored_cv_latex
 from services.application_materials import (
     CandidateEvidenceUnavailableError,
     JobForApplicationNotFoundError,
@@ -71,6 +72,26 @@ def tailor_cv_for_job(job_id: UUID, request: TailoredCVRequest) -> dict:
         raise HTTPException(status_code=404, detail="Job not found") from exc
     except CandidateEvidenceUnavailableError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except TailoredCVGenerationError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+
+@router.post("/{job_id}/tailored-cv/latex", response_model=TailoredCVLatexRead)
+def tailor_cv_latex_for_job(job_id: UUID, request: TailoredCVLatexRequest) -> dict:
+    try:
+        return draft_tailored_cv_latex(
+            str(job_id),
+            target_profile_id=str(request.target_profile_id) if request.target_profile_id else None,
+            instruction=request.instruction,
+            evidence_limit=request.evidence_limit,
+            template_id=request.template_id,
+        )
+    except JobForApplicationNotFoundError as exc:
+        raise HTTPException(status_code=404, detail="Job not found") from exc
+    except CandidateEvidenceUnavailableError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except TailoredCVLatexTemplateError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     except TailoredCVGenerationError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 

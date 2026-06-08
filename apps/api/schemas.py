@@ -70,6 +70,10 @@ class TailoredCVRequest(BaseModel):
     evidence_limit: int = Field(default=8, ge=1, le=16)
 
 
+class TailoredCVLatexRequest(TailoredCVRequest):
+    template_id: str | None = None
+
+
 class TailoredCVBullet(BaseModel):
     text: str
     evidence_ids: list[str] = Field(default_factory=list)
@@ -106,6 +110,13 @@ class TailoredCVRead(BaseModel):
     evidence_used: list[TailoredCVEvidence]
     gaps_or_cautions: list[str] = Field(default_factory=list)
     retrieved_evidence: list[RetrievedCandidateEvidence]
+
+
+class TailoredCVLatexRead(BaseModel):
+    filename: str
+    latex: str
+    template_id: str
+    warnings: list[str] = Field(default_factory=list)
 
 
 class AdzunaImportRequest(BaseModel):

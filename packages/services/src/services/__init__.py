@@ -6,6 +6,7 @@ from .candidate_documents import upload_candidate_cv
 from .candidate_indexing import CandidateEvidenceNotFoundError, index_candidate_evidence, reindex_all_candidate_evidence
 from .candidate_migration import LegacyProfileNotFoundError, migrate_profiles_to_candidate
 from .candidate_seed import CandidateSeedFixtureError, seed_fake_candidate
+from .application_latex import TailoredCVLatexTemplateError, draft_tailored_cv_latex
 from .application_materials import CandidateEvidenceUnavailableError, JobForApplicationNotFoundError, TailoredCVGenerationError, draft_tailored_cv
 from .job_explanations import ExplanationParseError, explain_ranked_jobs
 from .job_corpus import JobCorpusStatus, get_job_corpus_status
@@ -70,9 +71,11 @@ __all__ = [
     "TargetProfileSuggestionProvider",
     "TargetProfileNotFoundError",
     "TailoredCVGenerationError",
+    "TailoredCVLatexTemplateError",
     "UnsupportedCVFileError",
     "create_target_profile",
     "draft_tailored_cv",
+    "draft_tailored_cv_latex",
     "explain_ranked_jobs",
     "extract_cv_text",
     "extract_job_skills",

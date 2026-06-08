@@ -93,6 +93,20 @@ export async function draftTailoredCv(jobId, { targetProfileId = null, instructi
   )
 }
 
+export async function draftTailoredCvLatex(jobId, { targetProfileId = null, instruction = '', evidenceLimit = 8, templateId = null } = {}) {
+  return jsonRequest(
+    `/jobs/${jobId}/tailored-cv/latex`,
+    'POST',
+    {
+      target_profile_id: targetProfileId,
+      instruction: instruction || null,
+      evidence_limit: evidenceLimit,
+      template_id: templateId,
+    },
+    'Tailored CV LaTeX export failed',
+  )
+}
+
 export async function listProfiles({ limit = 50 } = {}) {
   const params = new URLSearchParams({ limit: String(limit) })
   const response = await fetch(`${API_BASE_URL}/profiles?${params.toString()}`)

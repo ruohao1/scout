@@ -836,6 +836,31 @@ textarea {
   box-shadow: 0 14px 34px rgba(49, 83, 63, 0.16);
 }
 
+.tailored-cv-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.tailored-cv-actions button {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid rgba(49, 83, 63, 0.16);
+  border-radius: 999px;
+  background: rgba(255, 254, 251, 0.9);
+  color: var(--green);
+  padding: 9px 12px;
+  font-weight: 950;
+  cursor: pointer;
+}
+
+.tailored-cv-actions button svg,
+.tailored-cv-copy-status svg {
+  width: 14px;
+  height: 14px;
+}
+
 .tailored-cv-control button:disabled {
   cursor: not-allowed;
   opacity: 0.65;
@@ -918,6 +943,30 @@ textarea {
   font-size: 0.78rem;
   font-weight: 800;
   line-height: 1.45;
+}
+
+.tailored-cv-latex small,
+.tailored-cv-copy-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted-soft);
+  font-size: 0.78rem;
+  font-weight: 800;
+  line-height: 1.45;
+}
+
+.tailored-cv-latex pre {
+  max-height: 280px;
+  overflow: auto;
+  border: 1px solid rgba(49, 83, 63, 0.14);
+  border-radius: 1rem;
+  background: rgba(20, 34, 28, 0.04);
+  color: #203028;
+  padding: 14px;
+  font-size: 0.78rem;
+  line-height: 1.45;
+  white-space: pre-wrap;
 }
 
 .tailored-cv-evidence-list {
