@@ -131,6 +131,10 @@ Rules:
 - Write concise UK-style CV bullets unless the user instruction says otherwise.
 - Each bullet must include an evidence_ids array with one or more retrieved evidence IDs.
 - If the candidate lacks evidence for an important job requirement, put it in gaps_or_cautions instead of pretending.
+- Write as final CV copy, not as an explanation of matching or tailoring.
+- Do not use phrases like "tailored for", "strong match", "good fit", "candidate", "the role", "the job", "this position", or "supporting evidence" in headline, summary, or bullets.
+- Do not mention the target company unless the candidate actually worked with that company.
+- Keep bullets factual and human: start with concrete work done, avoid marketing claims, and avoid repeating the same technology list in every bullet.
 
 Return JSON with this shape:
 {{

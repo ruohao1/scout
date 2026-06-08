@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import re
-from typing import Any
+from typing import Any, Callable
 
 from db.candidate import CandidateRepository
 from db.jobs import JobRepository
@@ -16,6 +16,9 @@ class TailoredCVLatexTemplateError(ValueError):
     pass
 
 
+SectionRenderer = Callable[[dict[str, Any]], str]
+
+
 def draft_tailored_cv_latex(
     job_id: str,
     *,
@@ -25,7 +28,7 @@ def draft_tailored_cv_latex(
     template_id: str | None = None,
 ) -> dict[str, Any]:
     selected_template = template_id or DEFAULT_TEMPLATE_ID
-    if selected_template != DEFAULT_TEMPLATE_ID:
+    if selected_template not in TEMPLATES:
         raise TailoredCVLatexTemplateError(f"Unknown LaTeX template: {selected_template}")
 
     jobs = JobRepository()
@@ -38,7 +41,8 @@ def draft_tailored_cv_latex(
         jobs=jobs,
     )
     candidate = CandidateRepository().get()
-    latex = _render_classic_cv(draft=draft, job=job or {}, candidate=candidate or {})
+    context = _latex_context(draft=draft, job=job or {}, candidate=candidate or {})
+    latex = _render_template(selected_template, context)
     return {
         "filename": _latex_filename(job=job or {}, candidate=candidate or {}),
         "latex": latex,
@@ -49,82 +53,168 @@ def draft_tailored_cv_latex(
     }
 
 
-def _render_classic_cv(*, draft: dict[str, Any], job: dict[str, Any], candidate: dict[str, Any]) -> str:
+def _latex_context(*, draft: dict[str, Any], job: dict[str, Any], candidate: dict[str, Any]) -> dict[str, Any]:
+    evidence_items = _unique_evidence_items([*(draft.get("evidence_used") or []), *(draft.get("retrieved_evidence") or [])])
+    return {
+        "candidate": candidate,
+        "job": job,
+        "draft": draft,
+        "evidence_by_type": _group_evidence_by_type(evidence_items),
+        "skills": _unique_skills(job=job, evidence_items=evidence_items),
+    }
+
+
+def _render_template(template_id: str, context: dict[str, Any]) -> str:
+    template = TEMPLATES[template_id]
+    sections = [SECTION_RENDERERS[name](context) for name in template["sections"]]
+    body = "\n\n".join(section for section in sections if section.strip())
+    return f"{_classic_preamble()}\n\n{body}\n\n\\end{{document}}\n"
+
+
+def _classic_preamble() -> str:
+    return r"""
+\documentclass[a4paper,11pt]{article}
+
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[left=1.5cm,right=1.5cm,top=1.5cm,bottom=1.5cm]{geometry}
+\usepackage{enumitem}
+\usepackage{titlesec}
+\usepackage[hidelinks]{hyperref}
+\usepackage{parskip}
+\usepackage{tabularx}
+\usepackage{xcolor}
+\usepackage{fontawesome5}
+\newcommand{\cvhighlight}[1]{\textbf{#1}}
+\newcommand{\sep}{\hspace{1.2em}\textbar\hspace{1.2em}}
+\definecolor{rulegray}{HTML}{555555}
+
+\pagenumbering{gobble}
+
+\titleformat{\section}{\large\bfseries}{}{0em}{}[{\color{rulegray}\titlerule[0.4pt]}]
+\titlespacing*{\section}{0pt}{0.8em}{0.45em}
+\setlist[itemize]{noitemsep, topsep=2pt, leftmargin=1.2em}
+
+\begin{document}
+""".strip()
+
+
+def _render_header(context: dict[str, Any]) -> str:
+    candidate = context["candidate"]
     candidate_name = _latex_escape(candidate.get("display_name") or "Candidate")
-    target = _latex_escape(_job_label(job))
-    summary = _latex_escape(draft.get("summary") or "")
-    bullets = "\n".join(f"    \\item {_latex_escape(_bullet_text(item))}" for item in draft.get("bullets") or [])
-    evidence = "\n".join(_evidence_line(item) for item in (draft.get("evidence_used") or [])[:6])
-    cautions = "\n".join(f"    \\item {_latex_escape(str(item))}" for item in draft.get("gaps_or_cautions") or [])
-    headline_line = _headline_line(candidate)
+    headline = _first_value(candidate, "headline")
+    headline_line = f"    {_latex_escape(headline)} " + r"\\" + "\n    \\vspace{2pt}\n" if headline else ""
     contact_block = _candidate_contact_block(candidate)
-    evidence_section = _itemized_section("Evidence Used", evidence)
-    caution_section = _itemized_section("Gaps or Cautions", cautions)
-    skills_section = _skills_section(job=job, evidence_items=draft.get("evidence_used") or [])
-
     return rf"""
-\documentclass[a4paper,11pt]{{article}}
-
-\usepackage[utf8]{{inputenc}}
-\usepackage[T1]{{fontenc}}
-\usepackage[left=1.5cm,right=1.5cm,top=1.5cm,bottom=1.5cm]{{geometry}}
-\usepackage{{enumitem}}
-\usepackage{{titlesec}}
-\usepackage[hidelinks]{{hyperref}}
-\usepackage{{parskip}}
-\usepackage{{tabularx}}
-\usepackage{{xcolor}}
-\usepackage{{fontawesome5}}
-\newcommand{{\cvhighlight}}[1]{{\textbf{{#1}}}}
-\newcommand{{\sep}}{{\hspace{{1.2em}}\textbar\hspace{{1.2em}}}}
-
-\pagenumbering{{gobble}}
-
-\titleformat{{\section}}{{\large\bfseries}}{{}}{{0em}}{{}}[\titlerule]
-\setlist[itemize]{{noitemsep, topsep=2pt}}
-
-\begin{{document}}
-
 %====================
 % HEADER
 %====================
 \begin{{center}}
     {{\LARGE \textbf{{{candidate_name}}}}} \\
-{headline_line}{contact_block}
-\end{{center}}
+{headline_line}{contact_block}\end{{center}}
+""".strip()
 
-%====================
-% SUMMARY
-%====================
-\section*{{Summary}}
-\cvhighlight{{Tailored for: {target}}}\\[0.35em]
-{summary}
 
+def _render_summary(context: dict[str, Any]) -> str:
+    summary = _clean_cv_text(context["draft"].get("summary") or context["candidate"].get("summary"))
+    if not summary:
+        return ""
+    return rf"""
+%====================
+% PROFILE
+%====================
+\section*{{Profile}}
+{_latex_escape(summary)}
+""".strip()
+
+
+def _render_education(context: dict[str, Any]) -> str:
+    items = context["evidence_by_type"].get("education", [])
+    return _section_lines("Education", [_dated_heading(item) for item in items])
+
+
+def _render_experience(context: dict[str, Any]) -> str:
+    bullets = [_latex_escape(_clean_cv_text(_bullet_text(item))) for item in context["draft"].get("bullets") or []]
+    if not bullets:
+        return ""
+    bullet_lines = "\n".join(f"    \\item {bullet}" for bullet in bullets)
+    return rf"""
 %====================
 % EXPERIENCE
 %====================
 \section*{{Experience}}
-\textbf{{Tailored Experience -- {target}}}
 \begin{{itemize}}
-{bullets}
+{bullet_lines}
 \end{{itemize}}
-
-{evidence_section}
-
-{caution_section}
-
-{skills_section}
-
-\end{{document}}
-""".strip() + "\n"
+""".strip()
 
 
-def _headline_line(candidate: dict[str, Any]) -> str:
-    headline = candidate.get("headline")
-    if not headline:
+def _render_projects(context: dict[str, Any]) -> str:
+    items = context["evidence_by_type"].get("project", [])
+    return _section_lines("Projects", [_dated_heading(item) for item in items])
+
+
+def _render_achievements(context: dict[str, Any]) -> str:
+    items = [
+        *context["evidence_by_type"].get("certification", []),
+        *context["evidence_by_type"].get("achievement", []),
+    ]
+    return _section_lines("Achievements", [_compact_heading(item) for item in items])
+
+
+def _render_skills(context: dict[str, Any]) -> str:
+    skills = context["skills"]
+    if not skills:
         return ""
-    escaped = _latex_escape(headline)
-    return f"    {escaped} \\\\\n    \\vspace{{2pt}}\n"
+    skills_line = ", ".join(_latex_escape(item) for item in skills)
+    return rf"""
+%====================
+% SKILLS
+%====================
+\section*{{Skills}}
+{skills_line}
+""".strip()
+
+
+def _section_lines(title: str, lines: list[str]) -> str:
+    body = "\n\n".join(line for line in lines if line.strip())
+    if not body:
+        return ""
+    return rf"""
+%====================
+% {title.upper()}
+%====================
+\section*{{{title}}}
+{body}
+""".strip()
+
+
+def _dated_heading(item: dict[str, Any]) -> str:
+    title = _latex_escape(item.get("title") or item.get("type") or "Candidate evidence")
+    organization = _latex_escape(item.get("organization") or "")
+    location = _latex_escape(item.get("location") or "")
+    dates = _date_range(item)
+    detail = _latex_escape(_clean_cv_text(item.get("description") or ""))
+    org_line = " -- ".join(part for part in [organization, location] if part)
+    heading = rf"\textbf{{{title}}}"
+    if dates:
+        heading += rf" \hfill {dates}"
+    if org_line:
+        heading += " " + r"\\" + "\n" + org_line
+    if detail:
+        heading += " " + r"\\" + "\n" + rf"\textit{{{detail}}}"
+    return heading
+
+
+def _compact_heading(item: dict[str, Any]) -> str:
+    title = _latex_escape(item.get("title") or item.get("type") or "Candidate evidence")
+    organization = _latex_escape(item.get("organization") or "")
+    dates = _date_range(item)
+    parts = [title, organization]
+    line = rf"\cvhighlight{{{' -- '.join(part for part in parts if part)}}}"
+    if dates:
+        line += rf" \hfill {dates}"
+    return line
 
 
 def _candidate_contact_block(candidate: dict[str, Any]) -> str:
@@ -150,21 +240,31 @@ def _candidate_contact_block(candidate: dict[str, Any]) -> str:
         items.append(rf"\faLinkedin \; \href{{{_latex_escape(linkedin)}}}{{{_latex_escape(_display_url(linkedin))}}}")
     if not items:
         return ""
-    return "\n    " + r" \sep ".join(items[:3]) + r" \\" + "\n"
+    return "    " + r" \sep ".join(items) + r" \\" + "\n"
 
 
-def _itemized_section(title: str, body: str) -> str:
-    if not body:
-        return ""
-    return rf"""
-\section*{{{title}}}
-\begin{{itemize}}
-{body}
-\end{{itemize}}
-""".strip()
+def _unique_evidence_items(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    unique = []
+    seen = set()
+    for item in items:
+        evidence_id = str(item.get("evidence_id") or item.get("chunk_id") or item.get("title") or "")
+        if not evidence_id or evidence_id in seen:
+            continue
+        seen.add(evidence_id)
+        unique.append(item)
+    return unique
 
 
-def _skills_section(*, job: dict[str, Any], evidence_items: list[dict[str, Any]]) -> str:
+def _group_evidence_by_type(items: list[dict[str, Any]]) -> dict[str, list[dict[str, Any]]]:
+    grouped: dict[str, list[dict[str, Any]]] = {}
+    for item in items:
+        key = str(item.get("type") or "").strip().lower()
+        if key:
+            grouped.setdefault(key, []).append(item)
+    return grouped
+
+
+def _unique_skills(*, job: dict[str, Any], evidence_items: list[dict[str, Any]]) -> list[str]:
     skills = []
     for value in job.get("skills") or []:
         if isinstance(value, str) and value.strip():
@@ -180,33 +280,7 @@ def _skills_section(*, job: dict[str, Any], evidence_items: list[dict[str, Any]]
         if key not in seen:
             seen.add(key)
             unique.append(skill)
-    if not unique:
-        return ""
-    midpoint = (len(unique) + 1) // 2
-    left = ", ".join(_latex_escape(item) for item in unique[:midpoint])
-    right = ", ".join(_latex_escape(item) for item in unique[midpoint:]) or left
-    return rf"""
-%====================
-% SKILLS
-%====================
-\section*{{Skills}}
-\begin{{tabularx}}{{\textwidth}}{{X X}}
-\textbf{{Relevant Skills:}} {left} &
-\textbf{{Additional Signals:}} {right} \\
-\end{{tabularx}}
-""".strip()
-
-
-def _evidence_line(item: dict[str, Any]) -> str:
-    title = item.get("title") or item.get("type") or "Candidate evidence"
-    organization = item.get("organization")
-    reason = item.get("reason")
-    parts = [str(title)]
-    if organization:
-        parts.append(str(organization))
-    if reason:
-        parts.append(str(reason))
-    return f"    \\item {_latex_escape(' -- '.join(parts))}"
+    return unique
 
 
 def _bullet_text(item: object) -> str:
@@ -218,6 +292,31 @@ def _bullet_text(item: object) -> str:
 def _job_label(job: dict[str, Any]) -> str:
     parts = [job.get("title"), job.get("company"), job.get("location")]
     return " -- ".join(str(part) for part in parts if part) or "selected role"
+
+
+def _clean_cv_text(value: object) -> str:
+    text = str(value or "").strip()
+    replacements = [
+        (r"\b[Ss]trong match for [^.]+\.\s*", ""),
+        (r"\b[Tt]ailored for:?\s*[^.]+\.\s*", ""),
+        (r"\b[Tt]ailored experience\s*[-–—:]\s*", ""),
+        (r"\b[Tt]his was a focused prototype rather than [^.]+\.\s*", ""),
+    ]
+    for pattern, replacement in replacements:
+        text = re.sub(pattern, replacement, text, flags=re.IGNORECASE)
+    return re.sub(r"\s+", " ", text).strip()
+
+
+def _date_range(item: dict[str, Any]) -> str:
+    start = item.get("start_date")
+    end = item.get("end_date") or ("Present" if item.get("is_current") else None)
+    if start and end:
+        return f"{_latex_escape(start)} -- {_latex_escape(end)}"
+    if start:
+        return _latex_escape(start)
+    if end:
+        return _latex_escape(end)
+    return ""
 
 
 def _latex_filename(*, job: dict[str, Any], candidate: dict[str, Any]) -> str:
@@ -261,3 +360,21 @@ def _latex_escape(value: object) -> str:
         "^": r"\textasciicircum{}",
     }
     return "".join(replacements.get(char, char) for char in text)
+
+
+SECTION_RENDERERS: dict[str, SectionRenderer] = {
+    "header": _render_header,
+    "summary": _render_summary,
+    "education": _render_education,
+    "experience": _render_experience,
+    "projects": _render_projects,
+    "achievements": _render_achievements,
+    "skills": _render_skills,
+}
+
+
+TEMPLATES: dict[str, dict[str, Any]] = {
+    DEFAULT_TEMPLATE_ID: {
+        "sections": ["header", "summary", "education", "experience", "projects", "achievements", "skills"],
+    }
+}
