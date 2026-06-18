@@ -72,6 +72,7 @@ class TailoredCVRequest(BaseModel):
 
 class TailoredCVLatexRequest(TailoredCVRequest):
     template_id: str | None = None
+    length: Literal["one_page", "two_page", "auto"] = "auto"
 
 
 class TailoredCVBullet(BaseModel):
@@ -116,6 +117,8 @@ class TailoredCVLatexRead(BaseModel):
     filename: str
     latex: str
     template_id: str
+    selected_length: Literal["one_page", "two_page"]
+    length_reason: str
     warnings: list[str] = Field(default_factory=list)
     artifact_id: str | None = None
     validation: dict[str, Any] | None = None
