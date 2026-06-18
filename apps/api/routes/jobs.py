@@ -86,6 +86,7 @@ def tailor_cv_latex_for_job(job_id: UUID, request: TailoredCVLatexRequest) -> di
             instruction=request.instruction,
             evidence_limit=request.evidence_limit,
             template_id=request.template_id,
+            length=request.length,
         )
     except JobForApplicationNotFoundError as exc:
         raise HTTPException(status_code=404, detail="Job not found") from exc
