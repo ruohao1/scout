@@ -19,6 +19,7 @@ class ChatResult:
     jobs: list[dict] = field(default_factory=list)
     ranked_jobs: list[dict] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
+    artifacts: list[dict] = field(default_factory=list)
 
 
 def respond_to_chat(

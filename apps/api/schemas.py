@@ -444,6 +444,8 @@ class SearchResult(BaseModel):
 class ChatMessage(BaseModel):
     role: Literal["user", "assistant"]
     content: str
+    jobs: list[dict[str, Any]] = Field(default_factory=list)
+    ranked_jobs: list[dict[str, Any]] = Field(default_factory=list)
 
 
 class ChatRequest(BaseModel):
@@ -451,8 +453,22 @@ class ChatRequest(BaseModel):
     history: list[ChatMessage] = Field(default_factory=list)
     target_profile_id: UUID | None = None
     profile_id: UUID | None = None
+    selected_job_id: UUID | None = None
     filters: SearchFilters = Field(default_factory=SearchFilters)
     limit: int = Field(default=5, ge=1, le=10)
+
+
+class ChatArtifact(BaseModel):
+    type: Literal["tailored_cv_latex"]
+    job_id: UUID
+    title: str | None = None
+    filename: str | None = None
+    artifact_id: str | None = None
+    pdf_available: bool = False
+    pdf_filename: str | None = None
+    selected_length: Literal["one_page", "two_page"] | None = None
+    length_reason: str | None = None
+    warnings: list[str] = Field(default_factory=list)
 
 
 class ChatResponse(BaseModel):
@@ -465,11 +481,13 @@ class ChatResponse(BaseModel):
         "get_job_corpus_status",
         "import_adzuna_jobs",
         "fetch_job_offers",
+        "tailored_cv_latex",
         "none",
     ]
     jobs: list[SearchResult] = Field(default_factory=list)
     ranked_jobs: list["RankedJobResult"] = Field(default_factory=list)
     warnings: list[str] = Field(default_factory=list)
+    artifacts: list[ChatArtifact] = Field(default_factory=list)
 
 
 class RankJobsRequest(BaseModel):
