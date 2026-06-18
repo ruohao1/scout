@@ -23,6 +23,7 @@ def chat(request: ChatRequest) -> dict:
         history=[message.model_dump() for message in request.history],
         target_profile_id=target_profile_id,
         profile_id=str(request.profile_id) if request.profile_id else None,
+        selected_job_id=str(request.selected_job_id) if request.selected_job_id else None,
         filters=JobSearchFilters(**request.filters.model_dump()),
         limit=request.limit,
     )
@@ -42,6 +43,7 @@ def _chat_event_stream(request: ChatRequest):
             history=[message.model_dump() for message in request.history],
             target_profile_id=target_profile_id,
             profile_id=str(request.profile_id) if request.profile_id else None,
+            selected_job_id=str(request.selected_job_id) if request.selected_job_id else None,
             filters=JobSearchFilters(**request.filters.model_dump()),
             limit=request.limit,
         ):

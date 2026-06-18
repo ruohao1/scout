@@ -9,10 +9,13 @@ from langgraph.config import get_stream_writer
 from langgraph.graph import END, START, StateGraph
 from rag.types import JobSearchFilters
 
+from .application_latex import draft_tailored_cv_latex
+from .application_materials import CandidateEvidenceUnavailableError, JobForApplicationNotFoundError, TailoredCVGenerationError
 from .chat import ChatResult
-from .chat_router import route_chat_request
+from .chat_job_reference import resolve_chat_job_reference
 from .chat_orchestrator import ChatPlanningProvider
 from .chat_orchestrator import respond_to_chat_with_tools
+from .chat_router import route_chat_request
 from .job_corpus import get_job_corpus_status
 from .job_providers import AdzunaJobProviderAdapter, AdzunaJobProviderClient, import_jobs
 from .job_search_agent import is_job_search_agent_request, respond_to_job_search_agent
@@ -23,6 +26,7 @@ class JobWorkflowState(TypedDict, total=False):
     history: list[dict[str, Any]]
     target_profile_id: str | None
     profile_id: str | None
+    selected_job_id: str | None
     filters: dict[str, Any]
     limit: int
     model: str
@@ -45,6 +49,7 @@ def respond_to_chat_with_graph(
     history: list[dict[str, Any]] | None = None,
     target_profile_id: str | None = None,
     profile_id: str | None = None,
+    selected_job_id: str | None = None,
     filters: JobSearchFilters | None = None,
     limit: int = 5,
     model: str | None = None,
@@ -58,6 +63,7 @@ def respond_to_chat_with_graph(
             history=history,
             target_profile_id=target_profile_id,
             profile_id=profile_id,
+            selected_job_id=selected_job_id,
             filters=filters,
             limit=limit,
             model=model or "gpt-5.5",
@@ -72,6 +78,7 @@ def stream_chat_with_graph(
     history: list[dict[str, Any]] | None = None,
     target_profile_id: str | None = None,
     profile_id: str | None = None,
+    selected_job_id: str | None = None,
     filters: JobSearchFilters | None = None,
     limit: int = 5,
     model: str = "gpt-5.5",
@@ -81,7 +88,16 @@ def stream_chat_with_graph(
     workflow = graph or build_job_workflow_graph(provider=provider)
     final_state: JobWorkflowState = {}
     for chunk in workflow.stream(
-        _input_state(message=message, history=history, target_profile_id=target_profile_id, profile_id=profile_id, filters=filters, limit=limit, model=model),
+        _input_state(
+            message=message,
+            history=history,
+            target_profile_id=target_profile_id,
+            profile_id=profile_id,
+            selected_job_id=selected_job_id,
+            filters=filters,
+            limit=limit,
+            model=model,
+        ),
         stream_mode=["updates", "custom"],
         version="v2",
     ):
@@ -104,6 +120,7 @@ def _input_state(
     history: list[dict[str, Any]] | None,
     target_profile_id: str | None,
     profile_id: str | None,
+    selected_job_id: str | None,
     filters: JobSearchFilters | None,
     limit: int,
     model: str,
@@ -113,6 +130,7 @@ def _input_state(
         "history": history or [],
         "target_profile_id": target_profile_id,
         "profile_id": profile_id,
+        "selected_job_id": selected_job_id,
         "filters": asdict(filters or JobSearchFilters()),
         "limit": limit,
         "model": model,
@@ -127,6 +145,7 @@ def _chat_result_from_state(state: JobWorkflowState) -> ChatResult:
         jobs=_dict_list(result.get("jobs")),
         ranked_jobs=_dict_list(result.get("ranked_jobs")),
         warnings=_string_list(result.get("warnings")),
+        artifacts=_dict_list(result.get("artifacts")),
     )
 
 
@@ -169,6 +188,8 @@ def build_job_workflow_graph(*, provider: ChatPlanningProvider | None = None):
             return "check_corpus"
         if route_name == "job_import":
             return "check_corpus"
+        if _is_tailor_cv_request(message):
+            return "tailor_cv"
         if route_name in {"job_search", "job_rank"}:
             return "job_search_agent"
         if route_name == "general_chat":
@@ -316,6 +337,103 @@ def build_job_workflow_graph(*, provider: ChatPlanningProvider | None = None):
         )
         return {"result": asdict(result)}
 
+    def tailor_cv_node(state: JobWorkflowState) -> dict[str, Any]:
+        _emit({"type": "step_started", "id": "resolve_job", "title": "Resolve selected job"})
+        resolution = resolve_chat_job_reference(
+            message=state.get("message", ""),
+            history=state.get("history") or [],
+            selected_job_id=state.get("selected_job_id"),
+        )
+        if resolution.job is None:
+            _emit({"type": "step_completed", "id": "resolve_job", "summary": "Job selection needed"})
+            return {
+                "result": {
+                    "message": "Which job should I tailor the CV for? Click a job card, or refer to a recent result like `job 1` or `job 2`.",
+                    "tool": "none",
+                    "jobs": [],
+                    "ranked_jobs": [],
+                    "warnings": [resolution.reason],
+                    "artifacts": [],
+                }
+            }
+
+        _emit({"type": "step_completed", "id": "resolve_job", "summary": resolution.reason})
+        _emit({"type": "step_started", "id": "tailor_cv", "title": "Generate tailored CV"})
+        try:
+            artifact = draft_tailored_cv_latex(
+                resolution.job.job_id,
+                target_profile_id=state.get("target_profile_id") or state.get("profile_id"),
+                instruction=state.get("message") or None,
+                evidence_limit=8,
+                length=_cv_length_from_message(state.get("message", "")),
+            )
+        except JobForApplicationNotFoundError:
+            _emit({"type": "tool_failed", "id": "tailor_cv", "summary": "Job not found"})
+            return {
+                "result": {
+                    "message": "I could not find that job anymore. Please select a current job card and try again.",
+                    "tool": "tailored_cv_latex",
+                    "jobs": [],
+                    "ranked_jobs": [],
+                    "warnings": ["Job not found."],
+                    "artifacts": [],
+                }
+            }
+        except CandidateEvidenceUnavailableError as exc:
+            _emit({"type": "tool_failed", "id": "tailor_cv", "summary": "Candidate evidence unavailable"})
+            return {
+                "result": {
+                    "message": "I need indexed candidate evidence before I can tailor a CV. Add or reindex candidate evidence, then ask me again.",
+                    "tool": "tailored_cv_latex",
+                    "jobs": [],
+                    "ranked_jobs": [],
+                    "warnings": [str(exc)],
+                    "artifacts": [],
+                }
+            }
+        except TailoredCVGenerationError as exc:
+            _emit({"type": "tool_failed", "id": "tailor_cv", "summary": "CV generation failed"})
+            return {
+                "result": {
+                    "message": "I could not generate the tailored CV. Try a shorter instruction or check the model connection.",
+                    "tool": "tailored_cv_latex",
+                    "jobs": [],
+                    "ranked_jobs": [],
+                    "warnings": [str(exc)],
+                    "artifacts": [],
+                }
+            }
+
+        chat_artifact = {
+            "type": "tailored_cv_latex",
+            "job_id": resolution.job.job_id,
+            "title": resolution.job.title,
+            "filename": artifact.get("filename"),
+            "artifact_id": artifact.get("artifact_id"),
+            "pdf_available": bool(artifact.get("pdf_available")),
+            "pdf_filename": artifact.get("pdf_filename"),
+            "selected_length": artifact.get("selected_length"),
+            "length_reason": artifact.get("length_reason"),
+            "warnings": artifact.get("warnings") or [],
+        }
+        _emit({"type": "tool_completed", "id": "tailor_cv", "summary": f"Generated {artifact.get('filename') or 'tailored CV LaTeX'}"})
+        _emit({"type": "step_completed", "id": "tailor_cv", "summary": "Prepared CV artifact"})
+        message = "I generated a tailored CV export for the selected job."
+        if artifact.get("pdf_available"):
+            message += " The PDF is ready to download."
+        else:
+            message += " The LaTeX source is ready; PDF compilation was skipped or unavailable."
+        return {
+            "result": {
+                "message": message,
+                "tool": "tailored_cv_latex",
+                "jobs": [],
+                "ranked_jobs": [],
+                "warnings": artifact.get("warnings") or [],
+                "artifacts": [chat_artifact],
+            }
+        }
+
     builder.add_node("route_request", route_request)
     builder.add_node("check_corpus", check_corpus)
     builder.add_node("corpus_status_response", corpus_status_response)
@@ -323,6 +441,7 @@ def build_job_workflow_graph(*, provider: ChatPlanningProvider | None = None):
     builder.add_node("import_adzuna_jobs", import_adzuna_jobs_node)
     builder.add_node("plan_and_run", plan_and_run)
     builder.add_node("job_search_agent", job_search_agent_node)
+    builder.add_node("tailor_cv", tailor_cv_node)
     builder.add_conditional_edges(
         "route_request",
         route_initial,
@@ -330,6 +449,7 @@ def build_job_workflow_graph(*, provider: ChatPlanningProvider | None = None):
             "check_corpus": "check_corpus",
             "job_search_agent": "job_search_agent",
             "plan_and_run": "plan_and_run",
+            "tailor_cv": "tailor_cv",
         },
     )
     builder.add_edge(START, "route_request")
@@ -347,6 +467,7 @@ def build_job_workflow_graph(*, provider: ChatPlanningProvider | None = None):
     builder.add_edge("request_adzuna_import_confirmation", END)
     builder.add_edge("import_adzuna_jobs", END)
     builder.add_edge("job_search_agent", END)
+    builder.add_edge("tailor_cv", END)
     builder.add_edge("plan_and_run", END)
     return builder.compile()
 
@@ -396,6 +517,22 @@ def _is_adzuna_import_request(message: str) -> bool:
     provider_requested = "adzuna" in normalized
     action_requested = any(word in normalized for word in ("fetch", "import", "ingest", "find", "search", "index"))
     return provider_requested and action_requested
+
+
+def _is_tailor_cv_request(message: str) -> bool:
+    normalized = message.lower()
+    has_cv = any(phrase in normalized for phrase in ("cv", "resume", "application"))
+    has_action = any(word in normalized for word in ("tailor", "generate", "draft", "write", "create", "make", "export"))
+    return has_cv and has_action
+
+
+def _cv_length_from_message(message: str) -> str:
+    normalized = message.lower()
+    if "two page" in normalized or "two-page" in normalized or "2 page" in normalized or "2-page" in normalized:
+        return "two_page"
+    if "one page" in normalized or "one-page" in normalized or "1 page" in normalized or "1-page" in normalized:
+        return "one_page"
+    return "auto"
 
 
 def _is_confirmation(message: str) -> bool:
