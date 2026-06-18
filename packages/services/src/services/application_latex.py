@@ -17,6 +17,12 @@ from .application_materials import draft_tailored_cv
 
 DEFAULT_TEMPLATE_ID = "classic_cv"
 DEFAULT_LATEX_ENGINE = "pdflatex"
+ONE_PAGE_MAX_BULLETS = 6
+ONE_PAGE_MAX_EDUCATION = 1
+ONE_PAGE_MAX_PROJECTS = 2
+ONE_PAGE_MAX_ACHIEVEMENTS = 2
+ONE_PAGE_MAX_SKILLS = 20
+ONE_PAGE_DESCRIPTION_LIMIT = 160
 
 
 class TailoredCVLatexTemplateError(ValueError):
@@ -57,6 +63,7 @@ def draft_tailored_cv_latex(
         "template_id": selected_template,
         "warnings": [
             "Generated from retrieved candidate evidence. Review and compile externally before submitting.",
+            *context["warnings"],
             *artifact["warnings"],
         ],
         "artifact_id": artifact["artifact_id"],
@@ -136,13 +143,16 @@ def _latex_output_dir() -> Path:
 
 
 def _latex_context(*, draft: dict[str, Any], job: dict[str, Any], candidate: dict[str, Any]) -> dict[str, Any]:
-    evidence_items = _unique_evidence_items([*(draft.get("evidence_used") or []), *(draft.get("retrieved_evidence") or [])])
+    evidence_items = _ranked_evidence_items(draft)
+    planned = _plan_one_page_cv(draft=draft, job=job, evidence_items=evidence_items)
     return {
         "candidate": candidate,
         "job": job,
         "draft": draft,
-        "evidence_by_type": _group_evidence_by_type(evidence_items),
-        "skills": _unique_skills(job=job, evidence_items=evidence_items),
+        "bullets": planned["bullets"],
+        "evidence_by_type": _group_evidence_by_type(planned["evidence_items"]),
+        "skills": planned["skills"],
+        "warnings": planned["warnings"],
     }
 
 
@@ -216,7 +226,7 @@ def _render_education(context: dict[str, Any]) -> str:
 
 
 def _render_experience(context: dict[str, Any]) -> str:
-    bullets = [_latex_escape(_clean_cv_text(_bullet_text(item))) for item in context["draft"].get("bullets") or []]
+    bullets = [_latex_escape(_clean_cv_text(_bullet_text(item))) for item in context["bullets"]]
     if not bullets:
         return ""
     bullet_lines = "\n".join(f"    \\item {bullet}" for bullet in bullets)
@@ -325,6 +335,82 @@ def _candidate_contact_block(candidate: dict[str, Any]) -> str:
     return "    " + r" \sep ".join(items) + r" \\" + "\n"
 
 
+def _ranked_evidence_items(draft: dict[str, Any]) -> list[dict[str, Any]]:
+    used_items = draft.get("evidence_used") or []
+    retrieved_items = sorted(draft.get("retrieved_evidence") or [], key=lambda item: float(item.get("score") or 0.0), reverse=True)
+    return _unique_evidence_items([*used_items, *retrieved_items])
+
+
+def _plan_one_page_cv(*, draft: dict[str, Any], job: dict[str, Any], evidence_items: list[dict[str, Any]]) -> dict[str, Any]:
+    bullets = list(draft.get("bullets") or [])[:ONE_PAGE_MAX_BULLETS]
+    grouped = _group_evidence_by_type(evidence_items)
+    selected_evidence = [
+        *_fit_evidence_items(grouped.get("education", [])[:ONE_PAGE_MAX_EDUCATION]),
+        *_fit_evidence_items(grouped.get("project", [])[:ONE_PAGE_MAX_PROJECTS]),
+        *grouped.get("certification", [])[:ONE_PAGE_MAX_ACHIEVEMENTS],
+    ]
+    remaining_achievement_slots = ONE_PAGE_MAX_ACHIEVEMENTS - len([item for item in selected_evidence if _evidence_type(item) == "certification"])
+    if remaining_achievement_slots > 0:
+        selected_evidence.extend(grouped.get("achievement", [])[:remaining_achievement_slots])
+
+    skills = _unique_skills(job=job, evidence_items=[*_referenced_evidence_items(bullets, evidence_items), *selected_evidence])
+    warnings = _one_page_warnings(
+        original_bullet_count=len(draft.get("bullets") or []),
+        rendered_bullet_count=len(bullets),
+        original_evidence_count=len(evidence_items),
+        rendered_evidence_count=len(selected_evidence),
+        original_skill_count=len(_unique_skills(job=job, evidence_items=evidence_items)),
+        rendered_skill_count=min(len(skills), ONE_PAGE_MAX_SKILLS),
+    )
+    return {
+        "bullets": bullets,
+        "evidence_items": selected_evidence,
+        "skills": skills[:ONE_PAGE_MAX_SKILLS],
+        "warnings": warnings,
+    }
+
+
+def _fit_evidence_items(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    return [_fit_evidence_item(item) for item in items]
+
+
+def _fit_evidence_item(item: dict[str, Any]) -> dict[str, Any]:
+    description = _clean_cv_text(item.get("description") or "")
+    if len(description) <= ONE_PAGE_DESCRIPTION_LIMIT:
+        return item
+    return {**item, "description": description[: ONE_PAGE_DESCRIPTION_LIMIT - 1].rstrip() + "..."}
+
+
+def _referenced_evidence_items(bullets: list[Any], evidence_items: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    referenced_ids = []
+    for bullet in bullets:
+        if not isinstance(bullet, dict):
+            continue
+        for evidence_id in bullet.get("evidence_ids") or []:
+            referenced_ids.append(str(evidence_id))
+    by_id = {str(item.get("evidence_id") or ""): item for item in evidence_items}
+    return [by_id[evidence_id] for evidence_id in referenced_ids if evidence_id in by_id]
+
+
+def _one_page_warnings(
+    *,
+    original_bullet_count: int,
+    rendered_bullet_count: int,
+    original_evidence_count: int,
+    rendered_evidence_count: int,
+    original_skill_count: int,
+    rendered_skill_count: int,
+) -> list[str]:
+    warnings = []
+    if original_bullet_count > rendered_bullet_count:
+        warnings.append(f"Omitted {original_bullet_count - rendered_bullet_count} lower-priority CV bullets to keep the PDF to one page.")
+    if original_evidence_count > rendered_evidence_count:
+        warnings.append(f"Omitted {original_evidence_count - rendered_evidence_count} lower-priority evidence items to keep the PDF to one page.")
+    if original_skill_count > rendered_skill_count:
+        warnings.append(f"Omitted {original_skill_count - rendered_skill_count} lower-priority skills to keep the PDF to one page.")
+    return warnings
+
+
 def _unique_evidence_items(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
     unique = []
     seen = set()
@@ -344,6 +430,10 @@ def _group_evidence_by_type(items: list[dict[str, Any]]) -> dict[str, list[dict[
         if key:
             grouped.setdefault(key, []).append(item)
     return grouped
+
+
+def _evidence_type(item: dict[str, Any]) -> str:
+    return str(item.get("type") or "").strip().lower()
 
 
 def _unique_skills(*, job: dict[str, Any], evidence_items: list[dict[str, Any]]) -> list[str]:
@@ -457,6 +547,6 @@ SECTION_RENDERERS: dict[str, SectionRenderer] = {
 
 TEMPLATES: dict[str, dict[str, Any]] = {
     DEFAULT_TEMPLATE_ID: {
-        "sections": ["header", "summary", "education", "experience", "projects", "achievements", "skills"],
+        "sections": ["header", "summary", "experience", "projects", "education", "achievements", "skills"],
     }
 }

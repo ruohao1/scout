@@ -7,6 +7,7 @@ from fastapi import APIRouter
 from fastapi.responses import StreamingResponse
 
 from apps.api.schemas import ChatRequest, ChatResponse
+from db.target_profiles import TargetProfileRepository
 from rag.types import JobSearchFilters
 from services.job_workflow_graph import respond_to_chat_with_graph, stream_chat_with_graph
 
@@ -16,10 +17,11 @@ router = APIRouter(tags=["chat"])
 
 @router.post("/chat", response_model=ChatResponse)
 def chat(request: ChatRequest) -> dict:
+    target_profile_id = _target_profile_id(request)
     result = respond_to_chat_with_graph(
         message=request.message,
         history=[message.model_dump() for message in request.history],
-        target_profile_id=str(request.target_profile_id) if request.target_profile_id else None,
+        target_profile_id=target_profile_id,
         profile_id=str(request.profile_id) if request.profile_id else None,
         filters=JobSearchFilters(**request.filters.model_dump()),
         limit=request.limit,
@@ -34,10 +36,11 @@ def chat_stream(request: ChatRequest) -> StreamingResponse:
 
 def _chat_event_stream(request: ChatRequest):
     try:
+        target_profile_id = _target_profile_id(request)
         for event in stream_chat_with_graph(
             message=request.message,
             history=[message.model_dump() for message in request.history],
-            target_profile_id=str(request.target_profile_id) if request.target_profile_id else None,
+            target_profile_id=target_profile_id,
             profile_id=str(request.profile_id) if request.profile_id else None,
             filters=JobSearchFilters(**request.filters.model_dump()),
             limit=request.limit,
@@ -45,3 +48,10 @@ def _chat_event_stream(request: ChatRequest):
             yield f"data: {json.dumps(event, default=str)}\n\n"
     except Exception as exc:
         yield f"data: {json.dumps({'type': 'error', 'message': str(exc)}, default=str)}\n\n"
+
+
+def _target_profile_id(request: ChatRequest) -> str | None:
+    if request.target_profile_id:
+        return str(request.target_profile_id)
+    latest = next(iter(TargetProfileRepository().list(limit=1)), None)
+    return str(latest["id"]) if latest else None
