@@ -12,6 +12,7 @@ export function applyChatStreamEvent(thread, assistantId, event) {
               tool: response.tool || 'none',
               jobs: response.jobs || [],
               rankedJobs: response.ranked_jobs || [],
+              artifacts: response.artifacts || [],
               warnings: response.warnings || [],
               status: 'completed',
               activityCollapsed: true,

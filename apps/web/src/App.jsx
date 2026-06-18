@@ -266,8 +266,14 @@ function App() {
         message: content,
         history: history
           .filter((message) => message.role === 'user' || message.role === 'assistant')
-          .map((message) => ({ role: message.role, content: message.content })),
+          .map((message) => ({
+            role: message.role,
+            content: message.content,
+            jobs: message.jobs || [],
+            ranked_jobs: message.rankedJobs || [],
+          })),
         target_profile_id: selectedProfileId,
+        selected_job_id: selectedChatJobId,
         filters: {
           location: null,
           contract_type: null,
@@ -582,6 +588,7 @@ function cloneMessages(messages) {
     ...message,
     jobs: message.jobs ? [...message.jobs] : message.jobs,
     rankedJobs: message.rankedJobs ? [...message.rankedJobs] : message.rankedJobs,
+    artifacts: message.artifacts ? [...message.artifacts] : message.artifacts,
     warnings: message.warnings ? [...message.warnings] : message.warnings,
     activities: message.activities ? message.activities.map((activity) => ({ ...activity })) : message.activities,
   }))

@@ -1,9 +1,12 @@
+import { Link } from 'react-router-dom'
+import { tailoredCvLatexPdfUrl } from '../../api.js'
 import { JobCard } from '../jobs/JobCard.jsx'
 import { ActivityTimeline } from './ActivityTimeline.jsx'
 import { MarkdownMessage } from './MarkdownMessage.jsx'
 
 export function ChatMessage({ message }) {
   const results = message.rankedJobs?.length ? message.rankedJobs : message.jobs || []
+  const tailoredCvLatexArtifacts = (message.artifacts || []).filter((artifact) => artifact.type === 'tailored_cv_latex')
   const activities = message.activities || []
   const hasToolActivity = activities.some((activity) => activity.kind === 'tool')
   const hasActiveOrFailedActivity = activities.some((activity) => activity.status === 'running' || activity.status === 'failed')
@@ -29,6 +32,34 @@ export function ChatMessage({ message }) {
           ))}
         </div>
       )}
+      {tailoredCvLatexArtifacts.length > 0 && (
+        <div className="result-grid">
+          {tailoredCvLatexArtifacts.map((artifact) => (
+            <section className="job-card" key={`${artifact.job_id}-${artifact.artifact_id || artifact.filename || artifact.title || 'tailored-cv'}`}>
+              <div className="job-card-main">
+                <h3>{artifact.title || artifact.filename || 'Tailored CV LaTeX export'}</h3>
+                {artifact.selected_length && <span className="job-card-meta">Length: {formatSelectedLength(artifact.selected_length)}</span>}
+                {artifact.length_reason && <span className="job-card-meta">{artifact.length_reason}</span>}
+                {artifact.warnings?.map((warning) => (
+                  <small className="warning" key={warning}>{warning}</small>
+                ))}
+                <div className="tailored-cv-actions">
+                  {artifact.pdf_available && artifact.artifact_id && (
+                    <a href={tailoredCvLatexPdfUrl(artifact.job_id, artifact.artifact_id)} download={artifact.pdf_filename || undefined}>
+                      Download PDF
+                    </a>
+                  )}
+                  <Link to={`/jobs/${artifact.job_id}/tailor-cv`}>Open CV pane</Link>
+                </div>
+              </div>
+            </section>
+          ))}
+        </div>
+      )}
     </article>
   )
+}
+
+function formatSelectedLength(value) {
+  return String(value || '').replace(/_/g, ' ')
 }
