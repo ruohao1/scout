@@ -45,7 +45,18 @@ class JobSearchRepository:
                 FROM job_chunks
                 JOIN jobs ON jobs.id = job_chunks.job_id
                 WHERE job_chunks.embedding IS NOT NULL
-                    AND (%(location)s::text IS NULL OR jobs.location ILIKE %(location_like)s)
+                    AND (
+                        %(location)s::text IS NULL
+                        OR (
+                            %(location_regex)s::text IS NOT NULL
+                            AND jobs.location ~* %(location_regex)s
+                            AND (%(location_exclude_regex)s::text IS NULL OR jobs.location !~* %(location_exclude_regex)s)
+                        )
+                        OR (
+                            %(location_regex)s::text IS NULL
+                            AND jobs.location ILIKE ANY(%(location_likes)s::text[])
+                        )
+                    )
                     AND (%(contract_type)s::text IS NULL OR jobs.contract_type = %(contract_type)s)
                     AND (%(company)s::text IS NULL OR jobs.company ILIKE %(company_like)s)
                     AND (%(seniority)s::text IS NULL OR jobs.seniority = %(seniority)s)
@@ -64,7 +75,9 @@ def _search_params(*, embedding: list[float], filters: JobSearchFilters, limit: 
         "embedding": _vector_literal(embedding),
         "limit": limit,
         "location": filters.location,
-        "location_like": _like(filters.location),
+        "location_likes": _location_likes(filters.location),
+        "location_regex": _location_regex(filters.location),
+        "location_exclude_regex": _location_exclude_regex(filters.location),
         "contract_type": filters.contract_type,
         "company": filters.company,
         "company_like": _like(filters.company),
@@ -100,5 +113,110 @@ def _like(value: str | None) -> str | None:
     return f"%{value}%" if value is not None else None
 
 
+def _location_likes(value: str | None) -> list[str] | None:
+    if value is None:
+        return None
+    normalized = value.strip().lower()
+    if normalized in {"usa", "us", "u.s.", "united states", "united states of america"}:
+        return ["%USA%", "%United States%", "% US%", *[f"%, {state}%" for state in _US_STATE_CODES]]
+    aliases = _location_aliases(value)
+    return [f"%{alias}%" for alias in aliases]
+
+
+def _location_regex(value: str | None) -> str | None:
+    if value is None:
+        return None
+    normalized = value.strip().lower()
+    if normalized not in {"usa", "us", "u.s.", "united states", "united states of america"}:
+        return None
+    state_codes = "|".join(sorted(_US_STATE_CODES))
+    return rf"(^|[,[:space:]])(USA|U\.S\.|US|United States( of America)?)([,[:space:]]|$)|,\s*({state_codes})(\s*,\s*(US|USA|U\.S\.|United States( of America)?))?\s*$"
+
+
+def _location_exclude_regex(value: str | None) -> str | None:
+    if value is None:
+        return None
+    normalized = value.strip().lower()
+    if normalized not in {"usa", "us", "u.s.", "united states", "united states of america"}:
+        return None
+    return r",\s*(AB|BC|MB|NB|NL|NS|NT|NU|ON|PE|QC|SK|YT)\s*,\s*CA\s*$"
+
+
+def _location_aliases(value: str) -> list[str]:
+    normalized = value.strip().lower()
+    if normalized == "san francisco":
+        return [
+            "San Francisco",
+            "San Francisco Bay Area",
+            "Bay Area",
+            "Oakland",
+            "Berkeley",
+            "Palo Alto",
+            "Mountain View",
+            "Menlo Park",
+            "Redwood City",
+            "San Mateo",
+            "San Jose",
+            "Sunnyvale",
+            "Santa Clara",
+        ]
+    return [value]
+
+
 def _vector_literal(embedding: list[float]) -> str:
     return "[" + ",".join(str(value) for value in embedding) + "]"
+
+
+_US_STATE_CODES = {
+    "AL",
+    "AK",
+    "AZ",
+    "AR",
+    "CA",
+    "CO",
+    "CT",
+    "DE",
+    "FL",
+    "GA",
+    "HI",
+    "ID",
+    "IL",
+    "IN",
+    "IA",
+    "KS",
+    "KY",
+    "LA",
+    "ME",
+    "MD",
+    "MA",
+    "MI",
+    "MN",
+    "MS",
+    "MO",
+    "MT",
+    "NE",
+    "NV",
+    "NH",
+    "NJ",
+    "NM",
+    "NY",
+    "NC",
+    "ND",
+    "OH",
+    "OK",
+    "OR",
+    "PA",
+    "RI",
+    "SC",
+    "SD",
+    "TN",
+    "TX",
+    "UT",
+    "VT",
+    "VA",
+    "WA",
+    "WV",
+    "WI",
+    "WY",
+    "DC",
+}

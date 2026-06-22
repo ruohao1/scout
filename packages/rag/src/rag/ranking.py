@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections import defaultdict
 from datetime import UTC, datetime
+import re
 from typing import Any
 
 from .types import JobSearchResult, RankedJob
@@ -27,7 +28,7 @@ def _rank_job(*, profile: dict[str, Any], results: list[JobSearchResult], now: d
     best = evidence[0]
 
     vector_score = _clamp01(max(result.score for result in results))
-    matched_skills, missing_skills, skill_overlap_score = _skill_scores(profile, best)
+    matched_skills, matched_text_skills, missing_skills, skill_overlap_score, text_skill_score = _skill_scores(profile, best)
     location_score = _location_score(profile, best)
     contract_type_score = _contract_type_score(profile, best)
     recency_score = _recency_score(best.created_at, now)
@@ -36,8 +37,9 @@ def _rank_job(*, profile: dict[str, Any], results: list[JobSearchResult], now: d
     penalty_score = _penalty_score(profile, best)
     seniority_penalty = _seniority_penalty(profile, best)
     final_score = _clamp01(
-        0.35 * vector_score
-        + 0.20 * skill_overlap_score
+        0.32 * vector_score
+        + 0.18 * skill_overlap_score
+        + 0.05 * text_skill_score
         + 0.10 * location_score
         + 0.05 * contract_type_score
         + 0.05 * recency_score
@@ -59,9 +61,11 @@ def _rank_job(*, profile: dict[str, Any], results: list[JobSearchResult], now: d
         recency_score=round(recency_score, 6),
         selected_evidence_score=round(selected_evidence_score, 6),
         background_evidence_score=round(background_evidence_score, 6),
+        text_skill_score=round(text_skill_score, 6),
         keyword_score=round(keyword_score, 6),
         penalty_score=round(penalty_score, 6),
         matched_skills=matched_skills,
+        matched_text_skills=matched_text_skills,
         missing_skills=missing_skills,
         matched_evidence=matched_evidence,
         evidence=evidence,
@@ -72,15 +76,17 @@ def _rank_job(*, profile: dict[str, Any], results: list[JobSearchResult], now: d
     )
 
 
-def _skill_scores(profile: dict[str, Any], result: JobSearchResult) -> tuple[list[str], list[str], float]:
+def _skill_scores(profile: dict[str, Any], result: JobSearchResult) -> tuple[list[str], list[str], list[str], float, float]:
     profile_skills = {_normalize(value) for value in _profile_skill_values(profile) if _normalize(value)}
     job_skills = {_normalize(value) for value in result.skills if _normalize(value)}
-    if not job_skills:
-        return [], [], 0.0
-
     matched = sorted(profile_skills & job_skills)
+    matched_text = _text_skill_matches(profile_skills - set(matched), result)
+    text_skill_score = len(matched_text) / len(profile_skills) if profile_skills else 0.0
+    if not job_skills:
+        return [], matched_text, [], 0.0, text_skill_score
+
     missing = sorted(job_skills - profile_skills)
-    return matched, missing, len(matched) / len(job_skills)
+    return matched, matched_text, missing, len(matched) / len(job_skills), text_skill_score
 
 
 def _profile_skill_values(profile: dict[str, Any]) -> list[str]:
@@ -88,8 +94,23 @@ def _profile_skill_values(profile: dict[str, Any]) -> list[str]:
     values.extend(profile.get("must_have_keywords") or [])
     values.extend(profile.get("nice_to_have_keywords") or [])
     for evidence in profile.get("evidence") or []:
+        if evidence.get("type") == "skill" and evidence.get("title"):
+            values.append(evidence.get("title"))
         values.extend(evidence.get("skills") or [])
     return values
+
+
+def _text_skill_matches(profile_skills: set[str], result: JobSearchResult) -> list[str]:
+    text = _job_plain_text(result)
+    return sorted(skill for skill in profile_skills if _contains_term(text, skill))
+
+
+def _contains_term(text: str, term: str) -> bool:
+    term = term.strip()
+    if len(term) < 3:
+        return False
+    pattern = r"(?<!\w)" + re.escape(term).replace(r"\ ", r"\s+") + r"(?!\w)"
+    return re.search(pattern, text) is not None
 
 
 def _evidence_scores(profile: dict[str, Any], result: JobSearchResult) -> tuple[float, float, list[dict[str, Any]]]:
@@ -184,6 +205,10 @@ def _normalize(value: object) -> str:
 
 def _job_text(result: JobSearchResult) -> str:
     return _normalize(" ".join([result.title, result.content, " ".join(result.skills)]))
+
+
+def _job_plain_text(result: JobSearchResult) -> str:
+    return _normalize(" ".join([result.title, result.content]))
 
 
 def _list(value: object) -> list[str]:

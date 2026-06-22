@@ -188,7 +188,7 @@ class RuntimeSettingsRead(BaseModel):
 
 class JobSpySettingsUpdate(BaseModel):
     sites: list[str] | None = None
-    default_count: int | None = Field(default=None, ge=1, le=25)
+    default_count: int | None = Field(default=None, ge=1, le=50)
 
 
 class RuntimeSettingsUpdate(BaseModel):
@@ -508,9 +508,11 @@ class RankedJobResult(BaseModel):
     recency_score: float
     selected_evidence_score: float = 0.0
     background_evidence_score: float = 0.0
+    text_skill_score: float = 0.0
     keyword_score: float = 0.0
     penalty_score: float = 0.0
     matched_skills: list[str]
+    matched_text_skills: list[str] = Field(default_factory=list)
     missing_skills: list[str]
     matched_evidence: list[dict[str, Any]] = Field(default_factory=list)
     evidence: list[SearchResult]
@@ -536,7 +538,9 @@ class ExplainedRankedJobResult(BaseModel):
     location_score: float
     contract_type_score: float
     recency_score: float
+    text_skill_score: float = 0.0
     matched_skills: list[str]
+    matched_text_skills: list[str] = Field(default_factory=list)
     missing_skills: list[str]
     why_match: str
     cv_suggestions: list[str]

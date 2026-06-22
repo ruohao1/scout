@@ -5,6 +5,8 @@ import os
 from typing import Any
 from urllib.parse import urlsplit
 
+from psycopg.errors import UndefinedTable
+
 from db.config import database_url
 from db.settings import AppSettingsRepository
 
@@ -13,7 +15,7 @@ from .job_providers import DEFAULT_JOBSPY_SITES, SUPPORTED_JOBSPY_SITES, jobspy_
 
 JOBSPY_SITES_KEY = "jobspy_sites"
 JOBSPY_DEFAULT_COUNT_KEY = "jobspy_default_count"
-DEFAULT_JOBSPY_FETCH_COUNT = 15
+DEFAULT_JOBSPY_FETCH_COUNT = 25
 
 
 @dataclass(frozen=True)
@@ -31,7 +33,7 @@ def get_jobspy_runtime_settings(*, settings: AppSettingsRepository | None = None
 
 def get_runtime_settings(*, settings: AppSettingsRepository | None = None) -> dict[str, Any]:
     repository = settings or AppSettingsRepository()
-    values = repository.list()
+    values = _settings(repository)
     jobspy = get_jobspy_runtime_settings(settings=repository)
     env_sites = jobspy_sites(os.environ.get("SCOUT_JOBSPY_SITES"))
     return {
@@ -68,7 +70,7 @@ def update_runtime_settings(payload: dict[str, Any], *, settings: AppSettingsRep
         updates[JOBSPY_SITES_KEY] = sites
 
     if "default_count" in jobspy:
-        updates[JOBSPY_DEFAULT_COUNT_KEY] = _bounded_int(jobspy["default_count"], fallback=DEFAULT_JOBSPY_FETCH_COUNT, minimum=1, maximum=25)
+        updates[JOBSPY_DEFAULT_COUNT_KEY] = _bounded_int(jobspy["default_count"], fallback=DEFAULT_JOBSPY_FETCH_COUNT, minimum=1, maximum=50)
 
     for key, value in updates.items():
         repository.set(key, value)
@@ -77,7 +79,10 @@ def update_runtime_settings(payload: dict[str, Any], *, settings: AppSettingsRep
 
 
 def _settings(repository: AppSettingsRepository | None) -> dict[str, Any]:
-    return (repository or AppSettingsRepository()).list()
+    try:
+        return (repository or AppSettingsRepository()).list()
+    except UndefinedTable:
+        return {}
 
 
 def _configured_sites(value: object | None) -> list[str]:
@@ -93,7 +98,7 @@ def _site_list(value: object) -> list[str]:
 
 
 def _bounded_count(value: object, *, fallback: int) -> int:
-    return _bounded_int(value, fallback=fallback, minimum=1, maximum=25)
+    return _bounded_int(value, fallback=fallback, minimum=1, maximum=50)
 
 
 def _bounded_int(value: object, *, fallback: int, minimum: int, maximum: int) -> int:

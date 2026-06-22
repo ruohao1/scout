@@ -18,7 +18,8 @@ from .chat_orchestrator import respond_to_chat_with_tools
 from .chat_router import route_chat_request
 from .job_corpus import get_job_corpus_status
 from .job_providers import AdzunaJobProviderAdapter, AdzunaJobProviderClient, import_jobs
-from .job_search_agent import is_job_search_agent_request, respond_to_job_search_agent
+from .job_search_agent import is_job_search_agent_request
+from .scout_multi_agent_graph import respond_to_scout_multi_agent
 
 
 class JobWorkflowState(TypedDict, total=False):
@@ -324,16 +325,14 @@ def build_job_workflow_graph(*, provider: ChatPlanningProvider | None = None):
     def job_search_agent_node(state: JobWorkflowState) -> dict[str, Any]:
         route = state.get("route") or {}
         filters = _merge_job_search_filters(state.get("filters") or {}, route.get("filters"))
-        result = respond_to_job_search_agent(
+        result = respond_to_scout_multi_agent(
             message=state.get("message", ""),
             history=state.get("history") or [],
             target_profile_id=state.get("target_profile_id"),
             profile_id=state.get("profile_id"),
             filters=filters,
             limit=int(state.get("limit") or 5),
-            route_query=route.get("query") if isinstance(route.get("query"), str) else None,
-            route_intent=route.get("intent") if isinstance(route.get("intent"), str) else None,
-            route_wants_live=route.get("wants_live") if isinstance(route.get("wants_live"), bool) else None,
+            route=route,
         )
         return {"result": asdict(result)}
 

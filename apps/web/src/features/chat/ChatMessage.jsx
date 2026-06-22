@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom'
 import { tailoredCvLatexPdfUrl } from '../../api.js'
 import { JobCard } from '../jobs/JobCard.jsx'
+import { sanitizeText } from '../../lib/sanitizeText.js'
 import { ActivityTimeline } from './ActivityTimeline.jsx'
 import { MarkdownMessage } from './MarkdownMessage.jsx'
 
@@ -8,6 +9,7 @@ export function ChatMessage({ message }) {
   const results = message.rankedJobs?.length ? message.rankedJobs : message.jobs || []
   const tailoredCvLatexArtifacts = (message.artifacts || []).filter((artifact) => artifact.type === 'tailored_cv_latex')
   const activities = message.activities || []
+  const content = sanitizeText(message.content || '')
   const hasToolActivity = activities.some((activity) => activity.kind === 'tool')
   const hasActiveOrFailedActivity = activities.some((activity) => activity.status === 'running' || activity.status === 'failed')
   const shouldShowActivity = hasToolActivity || hasActiveOrFailedActivity
@@ -19,10 +21,10 @@ export function ChatMessage({ message }) {
         {message.tool && <code>{message.tool}</code>}
       </div>
       {shouldShowActivity && <ActivityTimeline activities={activities} status={message.status} collapsed={message.activityCollapsed} />}
-      {message.content && (message.role === 'assistant' ? <MarkdownMessage content={message.content} /> : <p>{message.content}</p>)}
+      {content && (message.role === 'assistant' ? <MarkdownMessage content={content} /> : <p>{content}</p>)}
       {message.warnings?.map((warning) => (
         <div className="warning" key={warning}>
-          {warning}
+          {sanitizeText(warning)}
         </div>
       ))}
       {results.length > 0 && (

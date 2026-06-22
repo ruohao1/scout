@@ -1,3 +1,5 @@
+import { sanitizeObject } from './lib/sanitizeText.js'
+
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api'
 const PROFILE_UPLOAD_TIMEOUT_MS = 90_000
 
@@ -7,7 +9,7 @@ export async function sendChatMessage(payload) {
     headers: {
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify(payload),
+    body: JSON.stringify(sanitizeObject(payload)),
   })
 
   if (!response.ok) {
@@ -23,7 +25,7 @@ export async function sendChatMessageStream(payload, onEvent) {
     headers: {
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify(payload),
+    body: JSON.stringify(sanitizeObject(payload)),
   })
 
   if (!response.ok) {
@@ -47,14 +49,14 @@ export async function sendChatMessageStream(payload, onEvent) {
     for (const eventText of events) {
       const dataLine = eventText.split('\n').find((line) => line.startsWith('data: '))
       if (!dataLine) continue
-      onEvent(JSON.parse(dataLine.slice(6)))
+      onEvent(sanitizeObject(JSON.parse(dataLine.slice(6))))
     }
   }
 
   if (buffer.trim()) {
     const dataLine = buffer.split('\n').find((line) => line.startsWith('data: '))
     if (dataLine) {
-      onEvent(JSON.parse(dataLine.slice(6)))
+      onEvent(sanitizeObject(JSON.parse(dataLine.slice(6))))
     }
   }
 }

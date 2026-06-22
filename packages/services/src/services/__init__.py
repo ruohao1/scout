@@ -30,6 +30,7 @@ from .job_providers import (
 from .job_ranking import ProfileNotFoundError, TargetProfileNotFoundError, rank_jobs_for_profile, rank_jobs_for_target_profile
 from .job_search import EmptySearchQueryError, search_jobs
 from .job_search_agent import is_job_search_agent_request, respond_to_job_search_agent
+from .scout_multi_agent_graph import respond_to_scout_multi_agent
 from .job_skills import enrich_job_skills, extract_job_skills
 from .job_workflow_graph import respond_to_chat_with_graph
 from .profile_extraction import ProfileExtractionError, extract_profile_fields
@@ -98,6 +99,7 @@ __all__ = [
     "respond_to_chat_with_graph",
     "respond_to_chat_with_tools",
     "respond_to_job_search_agent",
+    "respond_to_scout_multi_agent",
     "reindex_all_candidate_evidence",
     "refresh_job_description",
     "route_chat_request",

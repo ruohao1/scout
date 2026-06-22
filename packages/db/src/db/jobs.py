@@ -183,3 +183,17 @@ class JobRepository:
                 },
             ).fetchone()
         return dict(row) if row is not None else None
+
+    def update_skills(self, job_id: str, *, skills: list[str]) -> dict[str, Any] | None:
+        with psycopg.connect(self.url, row_factory=dict_row) as conn:
+            row = conn.execute(
+                f"""
+                UPDATE jobs
+                SET skills = %(skills)s,
+                    updated_at = now()
+                WHERE id = %(job_id)s
+                RETURNING {JOB_COLUMNS}
+                """,
+                {"job_id": job_id, "skills": skills},
+            ).fetchone()
+        return dict(row) if row is not None else None

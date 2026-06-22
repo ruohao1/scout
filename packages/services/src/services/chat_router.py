@@ -49,6 +49,8 @@ def route_chat_request(
     model: str = "gpt-5.5",
     provider: ChatRouterProvider | None = None,
 ) -> ChatRoute:
+    message = _strip_system_reminders(message)
+    history = _strip_history_system_reminders(history or [])
     router = provider or OpenAIAuthProvider()
     try:
         response = router.generate(
@@ -56,7 +58,7 @@ def route_chat_request(
                 model=model,
                 messages=_messages(
                     message=message,
-                    history=history or [],
+                    history=history,
                     target_profile_id=target_profile_id or profile_id,
                     filters=filters or JobSearchFilters(),
                     limit=limit,
@@ -68,7 +70,7 @@ def route_chat_request(
     except (ProviderHTTPError, Exception) as exc:
         fallback = route_chat_request_fallback(
             message=message,
-            history=history or [],
+            history=history,
             target_profile_id=target_profile_id,
             profile_id=profile_id,
             filters=filters,
@@ -87,7 +89,7 @@ def route_chat_request_fallback(
     limit: int = 5,
 ) -> ChatRoute:
     del history, target_profile_id, profile_id, filters
-    text = message.strip()
+    text = _strip_system_reminders(message).strip()
     normalized = _normalized_text(text)
     if _is_corpus_status_request(normalized):
         return ChatRoute(route="corpus_status", intent="corpus_status", limit=limit, confidence=1.0, reason="User asked about indexed job corpus status.", used_fallback=True)
@@ -129,7 +131,7 @@ def _messages(*, message: str, history: list[dict[str, Any]], target_profile_id:
         role = item.get("role")
         content = item.get("content")
         if role in {"user", "assistant"} and isinstance(content, str) and content.strip():
-            messages.append(ProviderMessage(role=role, content=content))
+            messages.append(ProviderMessage(role=role, content=_strip_system_reminders(content)))
     messages.append(ProviderMessage(role="user", content=message))
     return messages
 
@@ -149,6 +151,7 @@ def _json_object(text: str) -> dict[str, Any] | None:
 
 
 def _clean_search_query(text: str) -> str | None:
+    text = _strip_system_reminders(text)
     query = re.sub(r"\b(fetch|find|search|show|get|list|jobs?|roles?|offers?)\b", " ", text, flags=re.IGNORECASE)
     query = re.sub(r"\s+", " ", query).strip()
     return query or None
@@ -175,7 +178,7 @@ def _is_confirmation(normalized: str) -> bool:
 
 def _looks_like_job_search(normalized: str) -> bool:
     words = set(normalized.split())
-    return bool(words & {"find", "get", "list", "search", "show"}) and bool(words & {"backend", "developer", "engineer", "frontend", "manager", "product", "python", "software", "react"})
+    return bool(words & {"cherche", "chercher", "find", "get", "list", "montre", "search", "show", "trouve", "trouver"}) and bool(words & {"backend", "cybersecurity", "data", "developer", "engineer", "frontend", "intern", "internship", "manager", "product", "python", "software", "react", "stage", "stages"})
 
 
 def _looks_like_profile_match(normalized: str) -> bool:
@@ -187,8 +190,27 @@ def _wants_live_jobs(normalized: str) -> bool:
 
 
 def _normalized_text(text: str) -> str:
+    text = _strip_system_reminders(text)
     normalized = re.sub(r"[^\w\s-]", " ", text.lower())
+    normalized = re.sub(r"\b(cyberecurity|cybersecuirty|cyber security)\b", "cybersecurity", normalized)
     return re.sub(r"\s+", " ", normalized).strip()
+
+
+def _strip_history_system_reminders(history: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    stripped: list[dict[str, Any]] = []
+    for item in history:
+        if not isinstance(item, dict):
+            continue
+        content = item.get("content")
+        if isinstance(content, str):
+            stripped.append({**item, "content": _strip_system_reminders(content)})
+        else:
+            stripped.append(item)
+    return stripped
+
+
+def _strip_system_reminders(text: str) -> str:
+    return re.sub(r"<system-reminder>.*?</system-reminder>", " ", text, flags=re.IGNORECASE | re.DOTALL)
 
 
 def _string(value: object) -> str | None:
@@ -232,4 +254,6 @@ Routing rules:
 - Use general_chat for greetings, help, and non-job conversation.
 - Preserve version terms in query, e.g. "Python 3 developer" or "React 18".
 - Parse limits only from explicit result-count language like "find me 3", "show 10", "top 20".
+- For internships/stages/traineeships, set filters.contract_type="internship" and filters.seniority="student".
+- Do not set filters.seniority="internship"; internship is a contract type, not a seniority.
 """.strip()
