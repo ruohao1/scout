@@ -765,6 +765,54 @@ textarea {
   padding-bottom: 18px;
 }
 
+.tailored-cv-hero {
+  grid-template-columns: minmax(0, 1fr);
+  border: 1px solid rgba(49, 83, 63, 0.13);
+  border-radius: 1.5rem;
+  background:
+    radial-gradient(circle at top right, rgba(207, 226, 196, 0.62), transparent 15rem),
+    linear-gradient(135deg, rgba(255, 254, 251, 0.96), rgba(239, 246, 233, 0.78));
+  padding: 18px;
+  box-shadow: 0 22px 56px rgba(47, 66, 52, 0.11);
+}
+
+.tailored-cv-status-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.tailored-cv-status-badge {
+  display: inline-flex;
+  width: fit-content;
+  align-items: center;
+  border: 1px solid rgba(49, 83, 63, 0.13);
+  border-radius: 999px;
+  background: rgba(255, 254, 251, 0.82);
+  color: var(--muted);
+  padding: 6px 9px;
+  font-size: 0.72rem;
+  font-weight: 950;
+  letter-spacing: 0.02em;
+}
+
+.tailored-cv-status-badge[data-tone='ready'] {
+  border-color: rgba(49, 83, 63, 0.24);
+  background: rgba(49, 83, 63, 0.1);
+  color: var(--green);
+}
+
+.tailored-cv-status-badge[data-tone='warn'] {
+  border-color: rgba(160, 117, 42, 0.24);
+  background: var(--warning-bg);
+  color: var(--warning);
+}
+
+.tailored-cv-status-badge[data-tone='idle'] {
+  color: var(--muted-soft);
+}
+
 .tailored-cv-header p,
 .tailored-cv-section p,
 .tailored-cv-control label span {
@@ -797,6 +845,19 @@ textarea {
 .tailored-cv-control {
   display: grid;
   gap: 12px;
+}
+
+.tailored-cv-command {
+  border: 1px solid rgba(49, 83, 63, 0.12);
+  border-radius: 1.25rem;
+  background: rgba(255, 254, 251, 0.62);
+  padding: 14px;
+}
+
+.tailored-cv-command-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
 }
 
 .tailored-cv-control label {
@@ -857,6 +918,11 @@ textarea {
   text-decoration: none;
 }
 
+.tailored-cv-actions button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
 .tailored-cv-actions button svg,
 .tailored-cv-actions a svg,
 .tailored-cv-copy-status svg {
@@ -910,6 +976,23 @@ textarea {
   gap: 12px;
 }
 
+.tailored-cv-empty-cockpit,
+.tailored-cv-preview-card,
+.tailored-cv-bullet-review,
+.tailored-cv-caution-panel,
+.tailored-cv-evidence-map,
+.tailored-cv-export-panel {
+  border: 1px solid rgba(49, 83, 63, 0.13);
+  border-radius: 1.25rem;
+  background: rgba(255, 254, 251, 0.72);
+  padding: 16px;
+}
+
+.tailored-cv-preview-card {
+  background:
+    linear-gradient(180deg, rgba(255, 254, 251, 0.92), rgba(246, 249, 243, 0.8));
+}
+
 .tailored-cv-section h3 {
   margin: 0;
   color: var(--foreground);
@@ -933,6 +1016,16 @@ textarea {
   line-height: 1.55;
 }
 
+.tailored-cv-bullets li {
+  border-bottom: 1px solid rgba(49, 83, 63, 0.1);
+  padding-bottom: 10px;
+}
+
+.tailored-cv-bullets li:last-child {
+  border-bottom: 0;
+  padding-bottom: 0;
+}
+
 .tailored-cv-bullets li::marker {
   color: var(--green);
   font-weight: 950;
@@ -946,6 +1039,26 @@ textarea {
   font-size: 0.78rem;
   font-weight: 800;
   line-height: 1.45;
+}
+
+.tailored-cv-bullet-evidence {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.tailored-cv-evidence-chip,
+.tailored-cv-skill-strip em {
+  display: inline-flex;
+  width: fit-content;
+  border-radius: 999px;
+  background: rgba(49, 83, 63, 0.08);
+  color: var(--green);
+  padding: 4px 7px;
+  font-size: 0.72rem;
+  font-style: normal;
+  font-weight: 900;
 }
 
 .tailored-cv-latex small,
@@ -1006,9 +1119,108 @@ textarea {
   white-space: pre-wrap;
 }
 
+.tailored-cv-export-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.tailored-cv-length-card {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 10px;
+  border: 1px solid rgba(49, 83, 63, 0.12);
+  border-radius: 1rem;
+  background: rgba(49, 83, 63, 0.06);
+  padding: 12px;
+}
+
+.tailored-cv-length-card svg {
+  width: 18px;
+  height: 18px;
+  color: var(--green);
+}
+
+.tailored-cv-length-card strong {
+  display: block;
+  color: var(--foreground);
+  font-weight: 950;
+  text-transform: capitalize;
+}
+
+.tailored-cv-length-card span {
+  display: block;
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: 0.84rem;
+  line-height: 1.45;
+}
+
+.tailored-cv-warning-stack {
+  display: grid;
+  gap: 6px;
+}
+
+.tailored-cv-source {
+  border: 1px solid rgba(49, 83, 63, 0.12);
+  border-radius: 1rem;
+  background: rgba(255, 254, 251, 0.72);
+  overflow: hidden;
+}
+
+.tailored-cv-source summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--green);
+  cursor: pointer;
+  padding: 12px 14px;
+  font-size: 0.82rem;
+  font-weight: 950;
+}
+
+.tailored-cv-source summary svg {
+  width: 15px;
+  height: 15px;
+}
+
+.tailored-cv-source pre {
+  margin: 0;
+  border: 0;
+  border-top: 1px solid rgba(49, 83, 63, 0.12);
+  border-radius: 0;
+}
+
 .tailored-cv-evidence-list {
   display: grid;
   gap: 10px;
+}
+
+.tailored-cv-evidence {
+  border: 1px solid rgba(49, 83, 63, 0.12);
+  border-radius: 1rem;
+  background: rgba(255, 254, 251, 0.66);
+  padding: 12px;
+}
+
+.tailored-cv-evidence-topline {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.tailored-cv-evidence-topline > span {
+  display: inline-flex;
+  width: fit-content;
+  border-radius: 999px;
+  background: rgba(49, 83, 63, 0.08);
+  color: var(--green);
+  padding: 4px 7px;
+  font-size: 0.68rem;
+  font-weight: 950;
+  text-transform: uppercase;
 }
 
 .tailored-cv-evidence span {
@@ -1016,6 +1228,13 @@ textarea {
   margin-top: 3px;
   color: var(--muted);
   font-size: 0.84rem;
+}
+
+.tailored-cv-skill-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 10px;
 }
 
 .settings-view {

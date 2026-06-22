@@ -104,9 +104,10 @@ function App() {
   const navigate = useNavigate()
   const selectedJobId = selectedJobIdFromPath(location.pathname)
   const selectedTailoredCvJobId = selectedTailoredCvJobIdFromPath(location.pathname)
+  const selectedChatTailoredCvJobId = selectedChatTailoredCvJobIdFromPath(location.pathname)
   const selectedChatJobId = selectedChatJobIdFromPath(location.pathname)
-  const selectedDetailJobId = selectedTailoredCvJobId || selectedJobId || selectedChatJobId
-  const activeView = selectedChatJobId ? 'chat' : (selectedJobId || selectedTailoredCvJobId) ? 'jobs' : viewByRoute[location.pathname] || 'chat'
+  const selectedDetailJobId = selectedChatTailoredCvJobId || selectedTailoredCvJobId || selectedJobId || selectedChatJobId
+  const activeView = (selectedChatJobId || selectedChatTailoredCvJobId) ? 'chat' : (selectedJobId || selectedTailoredCvJobId) ? 'jobs' : viewByRoute[location.pathname] || 'chat'
   const [threads, setThreads] = useState(() => {
     const stored = readStoredJson(STORAGE_KEYS.threads, initialThreads)
     return validStoredThreads(stored) ? stored : initialThreads
@@ -168,16 +169,16 @@ function App() {
       navigate('/candidate', { replace: true })
       return
     }
-    if (!viewByRoute[location.pathname] && !selectedJobIdFromPath(location.pathname) && !selectedTailoredCvJobIdFromPath(location.pathname) && !selectedChatJobIdFromPath(location.pathname)) {
+    if (!viewByRoute[location.pathname] && !selectedJobIdFromPath(location.pathname) && !selectedTailoredCvJobIdFromPath(location.pathname) && !selectedChatJobIdFromPath(location.pathname) && !selectedChatTailoredCvJobIdFromPath(location.pathname)) {
       navigate('/chat', { replace: true })
     }
   }, [location.pathname, navigate])
 
   useEffect(() => {
-    if (selectedChatJobId) {
+    if (selectedChatJobId || selectedChatTailoredCvJobId) {
       setIsContextPanelOpen(false)
     }
-  }, [selectedChatJobId])
+  }, [selectedChatJobId, selectedChatTailoredCvJobId])
 
   useEffect(() => {
     if (activeView === 'jobs' && !hasLoadedJobs && !isLoadingJobs) {
@@ -504,9 +505,11 @@ function App() {
                 draft={draft}
                 isSending={isSending}
                 selectedProfile={selectedProfile}
-                selectedJobId={selectedChatJobId}
+                selectedJobId={selectedChatTailoredCvJobId || selectedChatJobId}
                 selectedJob={selectedJob}
-                isJobPaneOpen={Boolean(selectedChatJobId && !isContextPanelOpen)}
+                initialLatexDraft={selectedChatTailoredCvJobId ? location.state?.latexDraft : null}
+                isJobPaneOpen={Boolean((selectedChatJobId || selectedChatTailoredCvJobId) && !isContextPanelOpen)}
+                isTailoringCv={Boolean(selectedChatTailoredCvJobId)}
                 isLoadingSelectedJob={isLoadingSelectedJob}
                 selectedJobError={selectedJobError}
                 onDraftChange={setDraft}
@@ -516,7 +519,7 @@ function App() {
                   navigate('/chat')
                   setIsContextPanelOpen(false)
                 }}
-                onRefreshSelectedJob={() => loadSelectedJob(selectedChatJobId)}
+                onRefreshSelectedJob={() => loadSelectedJob(selectedChatTailoredCvJobId || selectedChatJobId)}
               />
             )}
             {(activeView === 'chat' || (activeView === 'jobs' && selectedDetailJobId) || activeView === 'targetProfiles' || activeView === 'matches') && (
@@ -561,6 +564,11 @@ function selectedJobIdFromPath(pathname) {
 
 function selectedTailoredCvJobIdFromPath(pathname) {
   const match = pathname.match(/^\/jobs\/([^/]+)\/tailor-cv$/)
+  return match ? decodeURIComponent(match[1]) : null
+}
+
+function selectedChatTailoredCvJobIdFromPath(pathname) {
+  const match = pathname.match(/^\/chat\/jobs\/([^/]+)\/tailor-cv$/)
   return match ? decodeURIComponent(match[1]) : null
 }
 

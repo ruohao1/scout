@@ -49,7 +49,7 @@ export function ChatMessage({ message }) {
                       Download PDF
                     </a>
                   )}
-                  <Link to={`/jobs/${artifact.job_id}/tailor-cv`}>Open CV pane</Link>
+                  <Link to={`/chat/jobs/${artifact.job_id}/tailor-cv`} state={{ latexDraft: artifact }}>Open CV pane</Link>
                 </div>
               </div>
             </section>

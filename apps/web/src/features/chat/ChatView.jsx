@@ -3,9 +3,10 @@ import { useEffect, useRef } from 'react'
 import { PanelRightCloseIcon, PanelRightOpenIcon } from 'lucide-react'
 import { profileName } from '../../lib/profile.js'
 import { JobDetailPane } from '../jobs/JobDetailPane.jsx'
+import { TailoredCVPane } from '../jobs/TailoredCVPane.jsx'
 import { ChatMessage } from './ChatMessage.jsx'
 
-export function ChatView({ messages, draft, isSending, selectedProfile, selectedJobId, selectedJob, isJobPaneOpen, isLoadingSelectedJob, selectedJobError, onDraftChange, onSubmit, onShowJobPane, onCloseJobPane, onRefreshSelectedJob }) {
+export function ChatView({ messages, draft, isSending, selectedProfile, selectedJobId, selectedJob, initialLatexDraft, isJobPaneOpen, isTailoringCv, isLoadingSelectedJob, selectedJobError, onDraftChange, onSubmit, onShowJobPane, onCloseJobPane, onRefreshSelectedJob }) {
   const hasMountedRef = useRef(false)
 
   useEffect(() => {
@@ -23,15 +24,19 @@ export function ChatView({ messages, draft, isSending, selectedProfile, selected
 
   const rightPane = isJobPaneOpen ? (
     <div className="chat-job-pane-content">
-      <button className="chat-job-close" type="button" onClick={onCloseJobPane} aria-label="Hide job detail" title="Hide job detail">
+      <button className="chat-job-close" type="button" onClick={onCloseJobPane} aria-label="Hide workspace" title="Hide workspace">
         <PanelRightCloseIcon className="size-4" />
       </button>
-      <JobDetailPane job={selectedJob} isLoading={isLoadingSelectedJob} error={selectedJobError} onRefresh={onRefreshSelectedJob} />
+      {isTailoringCv ? (
+        <TailoredCVPane jobId={selectedJobId} selectedProfile={selectedProfile} initialLatexDraft={initialLatexDraft} />
+      ) : (
+        <JobDetailPane job={selectedJob} isLoading={isLoadingSelectedJob} error={selectedJobError} onRefresh={onRefreshSelectedJob} tailorCvBase="/chat/jobs" />
+      )}
     </div>
   ) : null
 
   return (
-    <WorkspaceShell className="chat-workspace" rightPane={rightPane} rightPaneLabel="Selected job detail" rightPaneTone="detail">
+    <WorkspaceShell className="chat-workspace" rightPane={rightPane} rightPaneLabel={isTailoringCv ? 'Tailored CV draft' : 'Selected job detail'} rightPaneTone={isTailoringCv ? 'draft' : 'detail'}>
       <section className="chat-panel" aria-label="Scout conversation">
         <div className="chat-conversation-column">
           <div className="transcript">

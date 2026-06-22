@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom'
 import { BanknoteIcon, BriefcaseBusinessIcon, Building2Icon, ExternalLinkIcon, FileTextIcon, MapPinIcon, SparklesIcon, TargetIcon } from 'lucide-react'
 
-export function JobDetailPane({ job, isLoading, error, onRefresh }) {
+export function JobDetailPane({ job, isLoading, error, onRefresh, tailorCvBase = '/jobs' }) {
   if (isLoading) {
     return (
       <aside className="job-detail-pane" aria-label="Selected job details">
@@ -59,7 +59,7 @@ export function JobDetailPane({ job, isLoading, error, onRefresh }) {
           </dl>
           <div className="job-detail-actions">
             {jobId && (
-              <Link className="job-detail-link" to={`/jobs/${jobId}/tailor-cv`} state={{ job }}>
+              <Link className="job-detail-link" to={`${tailorCvBase}/${jobId}/tailor-cv`} state={{ job }}>
                 Tailor CV bullets
                 <FileTextIcon aria-hidden="true" />
               </Link>

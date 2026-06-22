@@ -256,6 +256,8 @@ def _classic_preamble() -> str:
 \usepackage{xcolor}
 \usepackage{fontawesome5}
 \newcommand{\cvhighlight}[1]{\textbf{#1}}
+\newcommand{\cvExperience}[2]{\noindent\begin{tabularx}{\linewidth}{@{}Xr@{}}\textbf{#1} & #2\end{tabularx}\vspace{-0.6em}}
+\newcommand{\cvProject}[2]{\noindent\begin{tabularx}{\linewidth}{@{}Xr@{}}\textbf{#1} & #2\end{tabularx}\vspace{-0.6em}}
 \newcommand{\sep}{\hspace{1.2em}\textbar\hspace{1.2em}}
 \definecolor{rulegray}{HTML}{555555}
 
@@ -263,7 +265,7 @@ def _classic_preamble() -> str:
 
 \titleformat{\section}{\large\bfseries}{}{0em}{}[{\color{rulegray}\titlerule[0.4pt]}]
 \titlespacing*{\section}{0pt}{0.8em}{0.45em}
-\setlist[itemize]{noitemsep, topsep=2pt, leftmargin=1.2em}
+\setlist[itemize]{noitemsep, topsep=1pt, partopsep=0pt, parsep=0pt, leftmargin=1.2em}
 
 \begin{document}
 """.strip()
@@ -304,24 +306,120 @@ def _render_education(context: dict[str, Any]) -> str:
 
 
 def _render_experience(context: dict[str, Any]) -> str:
-    bullets = [_latex_escape(_clean_cv_text(_bullet_text(item))) for item in context["bullets"]]
-    if not bullets:
+    entries, loose_bullets = _experience_entries(context)
+    if not entries and not loose_bullets:
         return ""
-    bullet_lines = "\n".join(f"    \\item {bullet}" for bullet in bullets)
+    entry_lines = "\n\n".join(entries)
+    loose_lines = ""
+    if loose_bullets and not entries:
+        bullet_lines = "\n".join(f"    \\item {bullet}" for bullet in loose_bullets)
+        loose_lines = rf"""
+\begin{{itemize}}
+{bullet_lines}
+\end{{itemize}}
+""".strip()
+    body = "\n\n".join(line for line in [entry_lines, loose_lines] if line.strip())
     return rf"""
 %====================
 % EXPERIENCE
 %====================
 \section*{{Experience}}
+{body}
+""".strip()
+
+
+def _experience_entries(context: dict[str, Any]) -> tuple[list[str], list[str]]:
+    experiences = context["evidence_by_type"].get("experience", [])
+    by_id = {str(item.get("evidence_id") or ""): item for item in experiences}
+    all_by_id = _evidence_by_id(context)
+    grouped: dict[str, list[str]] = {evidence_id: [] for evidence_id in by_id}
+    loose_bullets = []
+    seen_bullets: set[str] = set()
+
+    for bullet in context["bullets"]:
+        text = _latex_escape(_clean_cv_text(_bullet_text(bullet)))
+        if not text or text in seen_bullets:
+            continue
+        matched_id = _first_referenced_experience_id(bullet, by_id)
+        if matched_id:
+            grouped[matched_id].append(text)
+        elif not _has_referenced_evidence(bullet, all_by_id):
+            loose_bullets.append(text)
+        seen_bullets.add(text)
+
+    entries = []
+    for evidence_id, item in by_id.items():
+        bullets = grouped.get(evidence_id) or []
+        if not bullets:
+            continue
+        bullet_lines = "\n".join(f"    \\item {bullet}" for bullet in bullets)
+        entries.append(
+            rf"""
+{_experience_heading(item)}
 \begin{{itemize}}
 {bullet_lines}
 \end{{itemize}}
 """.strip()
+        )
+    return entries, loose_bullets
+
+
+def _first_referenced_experience_id(bullet: object, by_id: dict[str, dict[str, Any]]) -> str | None:
+    return _first_referenced_evidence_id(bullet, by_id)
+
+
+def _first_referenced_evidence_id(bullet: object, by_id: dict[str, dict[str, Any]]) -> str | None:
+    if not isinstance(bullet, dict):
+        return None
+    for evidence_id in bullet.get("evidence_ids") or []:
+        key = str(evidence_id)
+        if key in by_id:
+            return key
+    return None
+
+
+def _has_referenced_evidence(bullet: object, by_id: dict[str, dict[str, Any]]) -> bool:
+    return _first_referenced_evidence_id(bullet, by_id) is not None
 
 
 def _render_projects(context: dict[str, Any]) -> str:
+    entries = _project_entries(context)
+    if entries:
+        return _section_lines("Projects", entries)
     items = context["evidence_by_type"].get("project", [])
     return _section_lines("Projects", [_dated_heading(item) for item in items])
+
+
+def _project_entries(context: dict[str, Any]) -> list[str]:
+    projects = context["evidence_by_type"].get("project", [])
+    by_id = {str(item.get("evidence_id") or ""): item for item in projects}
+    grouped: dict[str, list[str]] = {evidence_id: [] for evidence_id in by_id}
+    seen_bullets: set[str] = set()
+
+    for bullet in context["bullets"]:
+        text = _latex_escape(_clean_cv_text(_bullet_text(bullet)))
+        if not text or text in seen_bullets:
+            continue
+        matched_id = _first_referenced_evidence_id(bullet, by_id)
+        if matched_id:
+            grouped[matched_id].append(text)
+            seen_bullets.add(text)
+
+    entries = []
+    for evidence_id, item in by_id.items():
+        bullets = grouped.get(evidence_id) or []
+        if not bullets:
+            continue
+        bullet_lines = "\n".join(f"    \\item {bullet}" for bullet in bullets)
+        entries.append(
+            rf"""
+{_project_heading(item)}
+\begin{{itemize}}
+{bullet_lines}
+\end{{itemize}}
+""".strip()
+        )
+    return entries
 
 
 def _render_achievements(context: dict[str, Any]) -> str:
@@ -376,6 +474,26 @@ def _dated_heading(item: dict[str, Any]) -> str:
     return heading
 
 
+def _experience_heading(item: dict[str, Any]) -> str:
+    title = _latex_escape(item.get("title") or "Experience")
+    organization = _latex_escape(item.get("organization") or "")
+    location = _latex_escape(item.get("location") or "")
+    dates = _date_range(item)
+    organization_line = " -- ".join(part for part in [organization, location] if part)
+    detail = " ".join(part for part in [dates, organization_line] if part)
+    return rf"\cvExperience{{{title}}}{{{detail}}}"
+
+
+def _project_heading(item: dict[str, Any]) -> str:
+    title = _latex_escape(item.get("title") or "Project")
+    organization = _latex_escape(item.get("organization") or "")
+    location = _latex_escape(item.get("location") or "")
+    dates = _date_range(item)
+    organization_line = " -- ".join(part for part in [organization, location] if part)
+    detail = " ".join(part for part in [dates, organization_line] if part)
+    return rf"\cvProject{{{title}}}{{{detail}}}"
+
+
 def _compact_heading(item: dict[str, Any]) -> str:
     title = _latex_escape(item.get("title") or item.get("type") or "Candidate evidence")
     organization = _latex_escape(item.get("organization") or "")
@@ -422,16 +540,20 @@ def _ranked_evidence_items(draft: dict[str, Any]) -> list[dict[str, Any]]:
 def _plan_cv(*, draft: dict[str, Any], job: dict[str, Any], evidence_items: list[dict[str, Any]], limits: dict[str, int]) -> dict[str, Any]:
     bullets = list(draft.get("bullets") or [])[: limits["bullets"]]
     grouped = _group_evidence_by_type(evidence_items)
+    referenced_items = _referenced_evidence_items(bullets, evidence_items)
+    referenced_experiences = _unique_evidence_items([item for item in referenced_items if _evidence_type(item) == "experience"])
+    referenced_projects = _unique_evidence_items([item for item in referenced_items if _evidence_type(item) == "project"])
     selected_evidence = [
+        *_fit_evidence_items(referenced_experiences, description_limit=limits["description_limit"]),
         *_fit_evidence_items(grouped.get("education", [])[: limits["education"]], description_limit=limits["description_limit"]),
-        *_fit_evidence_items(grouped.get("project", [])[: limits["projects"]], description_limit=limits["description_limit"]),
+        *_fit_evidence_items(referenced_projects[: limits["projects"]], description_limit=limits["description_limit"]),
         *grouped.get("certification", [])[: limits["achievements"]],
     ]
     remaining_achievement_slots = limits["achievements"] - len([item for item in selected_evidence if _evidence_type(item) == "certification"])
     if remaining_achievement_slots > 0:
         selected_evidence.extend(grouped.get("achievement", [])[:remaining_achievement_slots])
 
-    skills = _unique_skills(job=job, evidence_items=[*_referenced_evidence_items(bullets, evidence_items), *selected_evidence])
+    skills = _unique_skills(job=job, evidence_items=[*referenced_items, *selected_evidence])
     warnings = _cv_length_warnings(
         original_bullet_count=len(draft.get("bullets") or []),
         rendered_bullet_count=len(bullets),
@@ -499,6 +621,16 @@ def _unique_evidence_items(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
         seen.add(evidence_id)
         unique.append(item)
     return unique
+
+
+def _evidence_by_id(context: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    by_id = {}
+    for items in context["evidence_by_type"].values():
+        for item in items:
+            evidence_id = str(item.get("evidence_id") or "")
+            if evidence_id:
+                by_id[evidence_id] = item
+    return by_id
 
 
 def _group_evidence_by_type(items: list[dict[str, Any]]) -> dict[str, list[dict[str, Any]]]:
