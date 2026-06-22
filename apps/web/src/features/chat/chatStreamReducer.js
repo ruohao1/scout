@@ -1,18 +1,20 @@
+import { sanitizeText } from '../../lib/sanitizeText.js'
+
 export function applyChatStreamEvent(thread, assistantId, event) {
   if (event.type === 'done') {
     const response = event.response || {}
     return {
       ...thread,
-      detail: response.message || 'Scout finished.',
+      detail: sanitizeText(response.message || 'Scout finished.'),
       messages: thread.messages.map((message) =>
         message.id === assistantId
           ? {
               ...message,
-              content: response.message || '',
+              content: sanitizeText(response.message || ''),
               tool: response.tool || 'none',
               jobs: response.jobs || [],
               rankedJobs: response.ranked_jobs || [],
-              warnings: response.warnings || [],
+              warnings: (response.warnings || []).map((warning) => sanitizeText(warning)),
               status: 'completed',
               activityCollapsed: true,
               activities: completeRunningActivities(message.activities || []),
@@ -30,10 +32,10 @@ export function applyChatStreamEvent(thread, assistantId, event) {
         message.id === assistantId
           ? {
               ...message,
-              content: event.message || 'The chat stream failed.',
+              content: sanitizeText(event.message || 'The chat stream failed.'),
               status: 'failed',
               activityCollapsed: false,
-              activities: failRunningActivities(message.activities || [], event.message || 'Stream failed'),
+              activities: failRunningActivities(message.activities || [], sanitizeText(event.message || 'Stream failed')),
             }
           : message,
       ),

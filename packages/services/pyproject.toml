@@ -8,7 +8,6 @@ dependencies = [
     "langchain-core>=1",
     "langchain-google-genai>=3",
     "langgraph>=1",
-    "python-jobspy>=1.1.82",
     "pypdf>=6",
     "providers",
     "rag",

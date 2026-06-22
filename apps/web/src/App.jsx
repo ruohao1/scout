@@ -19,6 +19,7 @@ import { MatchesView } from './features/matches/MatchesView.jsx'
 import { SettingsView } from './features/settings/SettingsView.jsx'
 import { TargetProfilesView } from './features/target-profiles/TargetProfilesView.jsx'
 import { PlaceholderView } from './features/workspace/PlaceholderView.jsx'
+import { sanitizeText } from './lib/sanitizeText.js'
 import { ACTIVE_TARGET_PROFILE_ID_KEY, readStoredBoolean, readStoredJson, readStoredString, writeStoredJson, writeStoredString } from './lib/storage.js'
 
 const initialMessages = [
@@ -225,7 +226,7 @@ function App() {
   }, [activeView, hasLoadedProfiles, selectedProfileExists, selectedProfileId, matchesProfileId, isLoadingMatches])
 
   async function submitMessage(messageText = draft) {
-    const content = messageText.trim()
+    const content = sanitizeText(messageText).trim()
     if (!content || isSending || !activeThread) return
 
     const userMessage = { id: crypto.randomUUID(), role: 'user', content }
@@ -266,7 +267,7 @@ function App() {
         message: content,
         history: history
           .filter((message) => message.role === 'user' || message.role === 'assistant')
-          .map((message) => ({ role: message.role, content: message.content })),
+          .map((message) => ({ role: message.role, content: sanitizeText(message.content || '') })),
         target_profile_id: selectedProfileId,
         filters: {
           location: null,

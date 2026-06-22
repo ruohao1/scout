@@ -78,9 +78,11 @@ class RankedJob:
     recency_score: float
     selected_evidence_score: float = 0.0
     background_evidence_score: float = 0.0
+    text_skill_score: float = 0.0
     keyword_score: float = 0.0
     penalty_score: float = 0.0
     matched_skills: list[str] = field(default_factory=list)
+    matched_text_skills: list[str] = field(default_factory=list)
     missing_skills: list[str] = field(default_factory=list)
     matched_evidence: list[dict[str, Any]] = field(default_factory=list)
     evidence: list[JobSearchResult] = field(default_factory=list)

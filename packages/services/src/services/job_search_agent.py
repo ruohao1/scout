@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import asdict, dataclass
 import re
+import unicodedata
 from typing import Any, Callable
 
 from db.provider_import_runs import ProviderImportRunRepository
@@ -178,8 +179,8 @@ def _parse_job_find_request(
 
 def _looks_like_job_search(text: str) -> bool:
     words = set(_normalized_text(text).split())
-    has_search_action = bool(words & {"find", "get", "list", "search", "show"})
-    has_role_terms = bool(words & {"backend", "developer", "engineer", "frontend", "manager", "product", "python", "software"})
+    has_search_action = bool(words & {"cherche", "chercher", "find", "get", "list", "montre", "search", "show", "trouve", "trouver"})
+    has_role_terms = bool(words & {"backend", "cybersecurity", "data", "developer", "engineer", "frontend", "intern", "internship", "manager", "product", "python", "software", "stage"})
     return has_search_action and has_role_terms
 
 
@@ -418,7 +419,7 @@ def _fetch_live_jobs(
                 "summary": f"Imported {created} jobs and indexed {result.indexed}",
             }
         )
-        if created or result.skipped:
+        if (created or result.skipped) and not _should_continue_jobspy_attempts(search_term=search_term, index=index, attempts=attempts):
             break
         if index < len(attempts) - 1:
             warnings.append(f"JobSpy returned 0 jobs for {_jobspy_attempt_label(params)}; retrying broader search.")
@@ -459,7 +460,7 @@ def _chat_result_from_local(
         else:
             message += " I also checked JobSpy for live offers, but it did not return new relevant jobs to index."
     elif fetched_live and created:
-        message += f" I fetched **{created} live {_plural(created, 'job')}** with JobSpy and indexed **{indexed}**, but none matched the current filters/profile strongly enough after refreshing the search."
+        message += f"\n\nI fetched **{created} live {_plural(created, 'job')}** with JobSpy and indexed **{indexed}**, but none matched the current filters/profile strongly enough after refreshing the search."
 
     return ChatResult(message=message, tool=str(local.get("tool") or "job_search_agent"), jobs=jobs, ranked_jobs=ranked_jobs, warnings=result_warnings)
 
@@ -497,12 +498,12 @@ def _empty_search_message(
                 suggestions.append(f"Broaden the location: `{_without_location(query)} remote` or try a nearby region")
         else:
             suggestions.append(f"Add a broader location: `{query} remote`")
-        suggestions.extend(
-            [
-                f"Use related titles: `{_related_role_query(query)}`",
-                "Open `/settings` and enable more JobSpy sites if live search is too narrow.",
-            ]
-        )
+        related_query = _related_role_query(query)
+        if related_query:
+            suggestions.append(f"Use related titles: `{related_query}`")
+        else:
+            suggestions.append("Try adjacent titles or broader keywords for the same role.")
+        suggestions.append("Open `/settings` and enable more JobSpy sites if live search is too narrow.")
         if fetched_live:
             message += " I also checked JobSpy live offers, but the refreshed results were still too narrow."
 
@@ -517,11 +518,52 @@ def _suggestion_query(text: str) -> str:
 
 
 def _suggestion_location(text: str) -> str | None:
-    match = re.search(r"\b(?:in|near|around)\s+([A-Za-z][A-Za-z\s-]{1,40})\b", text, flags=re.IGNORECASE)
-    if not match:
-        return None
-    location = re.sub(r"\b(?:jobs?|roles?|offers?|opportunities)\b.*$", "", match.group(1), flags=re.IGNORECASE).strip()
-    return location.title() if location else None
+    return _extract_location(text)
+
+
+def _extract_location(text: str) -> str | None:
+    normalized = _normalized_text(text)
+    candidates: list[str] = []
+    prep = r"(?:in|near|around|at|a|en|au|aux|sur)"
+    pattern = re.compile(rf"(?:^|\s){prep}\s+([a-z][a-z.'-]*(?:\s+(?!{prep}\b)[a-z][a-z.'-]*){{0,3}})", re.IGNORECASE)
+    for match in pattern.finditer(normalized):
+        candidate = _clean_location_candidate(match.group(1))
+        if candidate and _is_plausible_location_candidate(candidate):
+            candidates.append(candidate)
+    if candidates:
+        return _normalize_location(candidates[-1])
+
+    for alias, location in _LOCATION_ALIASES.items():
+        if re.search(rf"\b{re.escape(alias)}\b", normalized):
+            return location
+    return None
+
+
+def _clean_location_candidate(candidate: str) -> str:
+    candidate = re.split(
+        r"\b(?:for|with|as|who|that|which|remote|hybrid|onsite|on-site|job|jobs|role|roles|offer|offers|emploi|emplois|poste|postes|offre|offres)\b",
+        candidate,
+        maxsplit=1,
+        flags=re.IGNORECASE,
+    )[0]
+    candidate = re.split(r"[,.;:!?()]", candidate, maxsplit=1)[0]
+    return re.sub(r"\s+", " ", candidate).strip(" -'")
+
+
+def _is_plausible_location_candidate(candidate: str) -> bool:
+    if not candidate or candidate in _LOCATION_FALSE_POSITIVES:
+        return False
+    words = candidate.split()
+    if len(words) > 4:
+        return False
+    return not all(word in _LOCATION_FALSE_POSITIVES for word in words)
+
+
+def _normalize_location(candidate: str) -> str:
+    normalized = _normalized_text(candidate)
+    if normalized in _LOCATION_ALIASES:
+        return _LOCATION_ALIASES[normalized]
+    return " ".join(part.capitalize() for part in normalized.split())
 
 
 def _without_location(query: str) -> str:
@@ -530,12 +572,18 @@ def _without_location(query: str) -> str:
     return without_location or query
 
 
-def _related_role_query(query: str) -> str:
+def _related_role_query(query: str) -> str | None:
     if re.search(r"\bengineer\b", query, flags=re.IGNORECASE):
         return re.sub(r"\bengineer\b", "developer", query, count=1, flags=re.IGNORECASE)
     if re.search(r"\bdeveloper\b", query, flags=re.IGNORECASE):
         return re.sub(r"\bdeveloper\b", "engineer", query, count=1, flags=re.IGNORECASE)
-    return f"{query} software developer"
+    if re.search(r"\bcommunications?\b", query, flags=re.IGNORECASE):
+        return re.sub(r"\bcommunications?\b", "public relations", query, count=1, flags=re.IGNORECASE)
+    if re.search(r"\bmarketing\b", query, flags=re.IGNORECASE):
+        return re.sub(r"\bmarketing\b", "growth", query, count=1, flags=re.IGNORECASE)
+    if re.search(r"\bcybersecurity\b", query, flags=re.IGNORECASE):
+        return re.sub(r"\bcybersecurity\b", "security", query, count=1, flags=re.IGNORECASE)
+    return None
 
 
 def _broader_location(location: str) -> str | None:
@@ -575,10 +623,11 @@ def _float_value(value: object) -> float:
 
 def _relevant_search_jobs(jobs: list[dict[str, Any]], *, text: str, limit: int) -> list[dict[str, Any]]:
     terms = _relevance_terms(text)
+    core_terms = _core_query_terms(text)
     unique = _unique_by_job_id(jobs)
     if not terms:
-        return unique[:limit]
-    filtered = [job for job in unique if _job_matches_terms(job, terms)]
+        return [job for job in unique if _job_matches_core_terms(job, core_terms)][:limit]
+    filtered = [job for job in unique if _job_matches_terms(job, terms) and _job_matches_core_terms(job, core_terms)]
     return filtered[:limit]
 
 
@@ -624,11 +673,143 @@ def _job_matches_terms(job: dict[str, Any], terms: set[str]) -> bool:
     if specific_terms:
         role_terms = terms & _GENERIC_RELEVANCE_TERMS
         role_text = f"{title} {content}"
-        has_specific_terms = all(term in haystack for term in specific_terms)
+        has_specific_terms = all(_term_matches(term, haystack) for term in specific_terms)
         has_role_context = not role_terms or any(term in role_text for term in _GENERIC_RELEVANCE_TERMS)
         is_unwanted_support = _has_unwanted_support_context(title=title, content=content, terms=terms)
         return has_specific_terms and has_role_context and not is_unwanted_support
     return any(term in haystack for term in terms)
+
+
+def _term_matches(term: str, haystack: str) -> bool:
+    if term in {"communication", "communications"}:
+        return _communication_core_matches(haystack)
+    if term in {"health", "healthcare", "medical", "clinical", "sante", "pharma", "pharmaceutical"}:
+        return _healthcare_core_matches(haystack)
+    if term in haystack:
+        return True
+    if term == "cybersecurity":
+        return bool(re.search(r"\b(cyber|infosec|security|soc|threat)\b", haystack))
+    if term == "student":
+        return bool(re.search(r"\b(student|intern|internship|stage|stagiaire|placement|trainee|co-op|coop|summer|graduate|campus)\b", haystack))
+    return False
+
+
+def _core_query_terms(text: str) -> list[str]:
+    terms: list[str] = []
+    seen: set[str] = set()
+    for term in _relevance_terms_ordered(text):
+        term = _canonical_core_term(term)
+        if term in _NON_CORE_QUERY_TERMS or _is_location_core_term(term) or term in seen:
+            continue
+        terms.append(term)
+        seen.add(term)
+    return terms
+
+
+def _canonical_core_term(term: str) -> str:
+    if term == "communications":
+        return "communication"
+    if term in {"health", "healthcare", "medical", "clinical", "sante", "pharma", "pharmaceutical"}:
+        return "healthcare"
+    return term
+
+
+def _is_location_core_term(term: str) -> bool:
+    normalized = _normalized_text(term)
+    locations = set(_COUNTRY_ALIASES.keys()) | set(_LOCATION_ALIASES.keys()) | {_normalized_text(value) for value in _LOCATION_ALIASES.values()}
+    return normalized in locations
+
+
+def _job_matches_core_terms(job: dict[str, Any], core_terms: list[str]) -> bool:
+    if not core_terms:
+        return True
+    title = _normalized_text(str(job.get("title") or ""))
+    skills = _normalized_text(" ".join(skill for skill in [*(job.get("skills") or []), *(job.get("matched_skills") or [])] if isinstance(skill, str)))
+    if "cybersecurity" in core_terms and _is_non_cyber_role_title(title) and not _cybersecurity_core_matches(f"{title} {skills}"):
+        return False
+    haystack = _normalized_text(
+        " ".join(
+            part
+            for part in [
+                title,
+                str(job.get("company") or ""),
+                str(job.get("content") or ""),
+                str(job.get("description") or ""),
+                skills,
+            ]
+            if part
+        )
+    )
+    return all(_core_term_matches(term, haystack) for term in core_terms)
+
+
+def _core_term_matches(term: str, haystack: str) -> bool:
+    if term == "engineer":
+        return bool(re.search(r"\b(engineer|engineering)\b", haystack))
+    if term == "developer":
+        return bool(re.search(r"\b(developer|development|programmer)\b", haystack))
+    if term == "cybersecurity":
+        return _cybersecurity_core_matches(haystack)
+    if term == "marketing":
+        return bool(re.search(r"\b(marketing|growth|seo|campaign|social media|acquisition)\b", haystack))
+    if term == "communication":
+        return _communication_core_matches(haystack)
+    if term == "healthcare":
+        return _healthcare_core_matches(haystack)
+    if term == "data":
+        return bool(re.search(r"\b(data|analytics|analyst|bi|machine learning|ml)\b", haystack))
+    if term == "software":
+        return bool(re.search(r"\b(software|developer|development|programming|programmer)\b", haystack))
+    if term == "frontend":
+        return bool(re.search(r"\b(frontend|front-end|react|javascript|typescript|ui)\b", haystack))
+    if term == "backend":
+        return bool(re.search(r"\b(backend|back-end|api|server|python|java|node)\b", haystack))
+    return bool(re.search(rf"\b{re.escape(term)}\b", haystack))
+
+
+def _communication_core_matches(haystack: str) -> bool:
+    if re.search(
+        r"\b(communications|comms|public relations|pr|media relations|press|editorial|copywriting|brand|influence|influencer|social media|community manager)\b",
+        haystack,
+    ):
+        return True
+    if re.search(r"\b(digital|corporate|internal|external|marketing|brand|media|press|content|editorial|influence) communication\b", haystack):
+        return True
+    if re.search(r"\bcommunication(s)?\s+(intern|assistant|associate|specialist|manager|coordinator|project|campaign|team|department)\b", haystack):
+        return True
+    if re.search(r"\b(communication skills|communications skills|strong communication|excellent communication|written and verbal communication|verbal and written communication|interpersonal communication)\b", haystack):
+        return False
+    return False
+
+
+def _healthcare_core_matches(haystack: str) -> bool:
+    return bool(
+        re.search(
+            r"\b(healthcare|health care|healthtech|medical|clinical|clinic|patient|hospital|nurse|nursing|physician|doctor|pharma|pharmaceutical|pharmacovigilance|biotech|life sciences|medtech|sante|soins|hopital|medecin|medicale|clinique)\b",
+            haystack,
+        )
+    )
+
+
+def _cybersecurity_core_matches(haystack: str) -> bool:
+    if re.search(r"\b(cybersecurity|cyber security|infosec|information security|soc analyst|security operations|cyber operations)\b", haystack):
+        return True
+    if re.search(r"\b(dlp|iam|siem|vulnerability management|incident response|threat intelligence|penetration testing|appsec|cloud security|grc)\b", haystack):
+        return True
+    if re.search(r"\bsecurity\s+(engineer|engineering|analyst|intern|internship|operations|architecture|compliance|risk)\b", haystack):
+        return True
+    if re.search(r"\b(application|cloud|network|product|information|data)\s+security\b", haystack):
+        return True
+    return False
+
+
+def _is_non_cyber_role_title(title: str) -> bool:
+    return bool(
+        re.search(
+            r"\b(go-to-market|gtm|marketing|sales|business development|account executive|customer success|barista|office assistant|faculty|teacher|lecturer|professor)\b",
+            title,
+        )
+    )
 
 
 def _relevance_terms(text: str) -> set[str]:
@@ -640,13 +821,28 @@ def _relevance_terms_ordered(text: str) -> list[str]:
         "a",
         "an",
         "and",
+        "au",
+        "aux",
         "best",
+        "cherche",
+        "chercher",
         "current",
+        "de",
+        "des",
+        "du",
         "find",
         "for",
         "fresh",
         "get",
+        "la",
+        "le",
+        "les",
         "in",
+        "intern",
+        "internship",
+        "internships",
+        "moi",
+        "montre",
         "job",
         "jobs",
         "latest",
@@ -657,21 +853,29 @@ def _relevance_terms_ordered(text: str) -> list[str]:
         "me",
         "more",
         "my",
+        "near",
         "new",
         "offer",
         "offers",
         "online",
         "opportunities",
         "opportunity",
+        "around",
+        "at",
         "please",
         "profile",
         "role",
         "roles",
         "search",
         "show",
+        "stage",
+        "stages",
         "that",
         "the",
+        "trouve",
+        "trouver",
         "to",
+        "trainee",
     }
     locations = _COUNTRY_ALIASES.keys()
     terms: list[str] = []
@@ -698,6 +902,8 @@ def _jobspy_search_term(text: str, *, target_profile_id: str | None) -> str | No
         return _target_profile_search_term(target_profile_id)
     query = _role_search_query(text)
     if query and query.lower() not in {"job", "jobs", "role", "roles", "offer", "offers"}:
+        if _first_contract_type(_normalized_text(text)) == "internship" and not re.search(r"\b(intern|internship|placement|trainee)\b", query, flags=re.IGNORECASE):
+            return f"{query} internship"
         return query
     if not target_profile_id:
         return None
@@ -716,15 +922,83 @@ def _target_profile_search_term(target_profile_id: str) -> str | None:
 
 
 def _jobspy_attempts(*, search_term: str, location: str | None) -> list[dict[str, str | None]]:
-    attempts = [{"search_term": search_term, "location": location}]
-    broader_term = _broader_search_term(search_term)
-    if broader_term and broader_term.lower() != search_term.lower():
-        attempts.append({"search_term": broader_term, "location": location})
+    terms = _jobspy_search_terms(search_term)
+    attempts: list[dict[str, str | None]] = []
+    for term in terms:
+        attempts.append({"search_term": term, "location": location})
     if location:
-        for term in (search_term, broader_term):
-            if term and not any(attempt["search_term"] == term and attempt["location"] is None for attempt in attempts):
-                attempts.append({"search_term": term, "location": None})
-    return attempts[:4]
+        for term in terms[:2]:
+            attempts.append({"search_term": term, "location": None})
+    return _unique_jobspy_attempts(attempts)[:8]
+
+
+def _jobspy_search_terms(search_term: str) -> list[str]:
+    terms = [search_term]
+    normalized = _normalized_text(search_term)
+    if "cybersecurity" in normalized or re.search(r"\b(cyber|security|infosec|soc|grc)\b", normalized):
+        wants_internship = bool(re.search(r"\b(intern|internship|student|stage|placement|trainee)\b", normalized))
+        terms.extend(
+            [
+                "security intern" if wants_internship else "security analyst",
+                "cyber intern" if wants_internship else "cyber security",
+                "information security intern" if wants_internship else "information security",
+                "soc intern" if wants_internship else "soc analyst",
+                "grc intern" if wants_internship else "grc analyst",
+                "security analyst intern" if wants_internship else "cybersecurity analyst",
+            ]
+        )
+    if re.search(r"\b(healthcare|health care|health|medical|clinical|sante|pharma)\b", normalized):
+        wants_internship = bool(re.search(r"\b(intern|internship|student|stage|placement|trainee)\b", normalized))
+        terms.extend(
+            [
+                "medical intern" if wants_internship else "medical",
+                "clinical intern" if wants_internship else "clinical research",
+                "healthcare intern" if wants_internship else "healthcare",
+                "pharma intern" if wants_internship else "pharmaceutical",
+                "life sciences intern" if wants_internship else "life sciences",
+                "sante stage" if wants_internship else "sante",
+            ]
+        )
+    broader_term = _broader_search_term(search_term)
+    if broader_term:
+        terms.append(broader_term)
+    return _unique_strings(terms)
+
+
+def _unique_jobspy_attempts(attempts: list[dict[str, str | None]]) -> list[dict[str, str | None]]:
+    unique: list[dict[str, str | None]] = []
+    seen: set[tuple[str | None, str | None]] = set()
+    for attempt in attempts:
+        key = (attempt.get("search_term"), attempt.get("location"))
+        if key in seen:
+            continue
+        unique.append(attempt)
+        seen.add(key)
+    return unique
+
+
+def _unique_strings(values: list[str | None]) -> list[str]:
+    unique: list[str] = []
+    seen: set[str] = set()
+    for value in values:
+        normalized = re.sub(r"\s+", " ", value or "").strip()
+        key = normalized.lower()
+        if not normalized or key in seen:
+            continue
+        unique.append(normalized)
+        seen.add(key)
+    return unique
+
+
+def _should_continue_jobspy_attempts(*, search_term: str, index: int, attempts: list[dict[str, str | None]]) -> bool:
+    if index >= len(attempts) - 1:
+        return False
+    normalized = _normalized_text(search_term)
+    if "cybersecurity" in normalized or re.search(r"\b(cyber|security|infosec|soc|grc)\b", normalized):
+        return index < 5
+    if re.search(r"\b(healthcare|health care|health|medical|clinical|sante|pharma)\b", normalized):
+        return index < 5
+    return False
 
 
 def _broader_search_term(search_term: str) -> str | None:
@@ -756,6 +1030,7 @@ def _jobspy_sites_label(sites: list[str] | str | None) -> str:
 
 
 def _search_query(text: str) -> str:
+    text = _strip_system_reminders(text)
     query = re.sub(r"\b(fetch|find|search|show|get|list|jobs?|roles?|offers?)\b", " ", text, flags=re.IGNORECASE)
     query = re.sub(r"\s+", " ", query).strip()
     return query or text
@@ -772,6 +1047,7 @@ def _role_search_query(text: str) -> str | None:
 
 def _merge_filters(text: str, filters: JobSearchFilters) -> JobSearchFilters:
     normalized = text.lower()
+    filters = _normalize_filter_values(filters)
     return JobSearchFilters(
         location=filters.location or _first_location(normalized),
         contract_type=filters.contract_type or _first_contract_type(normalized),
@@ -782,11 +1058,31 @@ def _merge_filters(text: str, filters: JobSearchFilters) -> JobSearchFilters:
     )
 
 
+def _normalize_filter_values(filters: JobSearchFilters) -> JobSearchFilters:
+    contract_type = filters.contract_type
+    seniority = filters.seniority
+    seniority_contract = _first_contract_type(seniority or "")
+    if seniority_contract and not contract_type:
+        contract_type = seniority_contract
+    if seniority_contract:
+        seniority = _first_seniority(seniority or "")
+    return JobSearchFilters(
+        location=filters.location,
+        contract_type=contract_type,
+        company=filters.company,
+        seniority=seniority,
+        remote_policy=filters.remote_policy,
+        source=filters.source,
+    )
+
+
 def _first_location(text: str) -> str | None:
-    return _suggestion_location(text)
+    return _extract_location(text)
 
 
 def _first_contract_type(text: str) -> str | None:
+    if re.search(r"\b(intern|internship|stages?|stagiaire|placement|trainee)\b", text, flags=re.IGNORECASE):
+        return "internship"
     if "contract" in text or "freelance" in text:
         return "contract"
     if "full time" in text or "full-time" in text or "permanent" in text:
@@ -795,8 +1091,8 @@ def _first_contract_type(text: str) -> str | None:
 
 
 def _first_seniority(text: str) -> str | None:
-    if "intern" in text or "internship" in text:
-        return "internship"
+    if re.search(r"\b(intern|internship|stages?|stagiaire|placement|trainee|student|etudiant|etudiante)\b", text, flags=re.IGNORECASE):
+        return "student"
     if "junior" in text or "entry level" in text or "entry-level" in text or "graduate" in text:
         return "junior"
     if "senior" in text:
@@ -828,6 +1124,8 @@ def _jobspy_job_type(contract_type: str | None) -> str | None:
         return "parttime"
     if normalized == "contract":
         return "contract"
+    if normalized in {"internship", "intern", "stage", "placement"}:
+        return "internship"
     return None
 
 
@@ -866,8 +1164,16 @@ def _record_jobspy_run(
 
 
 def _normalized_text(text: str) -> str:
-    normalized = re.sub(r"[^\w\s-]", " ", text.lower())
+    text = _strip_system_reminders(text)
+    normalized = unicodedata.normalize("NFKD", text)
+    normalized = "".join(char for char in normalized if not unicodedata.combining(char)).lower()
+    normalized = re.sub(r"\b(securite informatique|cyber securite|cybersecurite|cyber security|cyberecurity|cybersecuirty)\b", "cybersecurity", normalized, flags=re.IGNORECASE)
+    normalized = re.sub(r"[^\w\s-]", " ", normalized)
     return re.sub(r"\s+", " ", normalized).strip()
+
+
+def _strip_system_reminders(text: str) -> str:
+    return re.sub(r"<system-reminder>.*?</system-reminder>", " ", text, flags=re.IGNORECASE | re.DOTALL)
 
 
 def _has_unwanted_support_context(*, title: str, content: str, terms: set[str]) -> bool:
@@ -879,6 +1185,75 @@ def _has_unwanted_support_context(*, title: str, content: str, terms: set[str]) 
 
 _GENERIC_RELEVANCE_TERMS = {"developer", "engineer", "engineering", "software", "role", "roles"}
 _SUPPORT_CONTEXT_TERMS = {"support engineer", "customer support", "technical support", "training", "trainer", "learning and development", "l&d"}
+_NON_CORE_QUERY_TERMS = {
+    "campus",
+    "co-op",
+    "coop",
+    "graduate",
+    "intern",
+    "internship",
+    "internships",
+    "job",
+    "jobs",
+    "placement",
+    "role",
+    "roles",
+    "stage",
+    "stages",
+    "student",
+    "summer",
+    "trainee",
+}
+_LOCATION_ALIASES = {
+    "espagne": "Spain",
+    "spain": "Spain",
+    "angleterre": "England",
+    "england": "England",
+    "royaume uni": "United Kingdom",
+    "uk": "United Kingdom",
+    "u k": "United Kingdom",
+    "united kingdom": "United Kingdom",
+    "luxembourg": "Luxembourg",
+    "france": "France",
+    "allemagne": "Germany",
+    "germany": "Germany",
+    "pays bas": "Netherlands",
+    "netherlands": "Netherlands",
+    "barcelone": "Barcelona",
+    "barcelona": "Barcelona",
+    "madrid": "Madrid",
+    "paris": "Paris",
+    "berlin": "Berlin",
+    "amsterdam": "Amsterdam",
+    "londres": "London",
+    "london": "London",
+    "san francisco": "San Francisco",
+    "miami": "Miami",
+    "new york": "New York",
+    "los angeles": "Los Angeles",
+    "seattle": "Seattle",
+    "austin": "Austin",
+    "boston": "Boston",
+    "chicago": "Chicago",
+}
+_LOCATION_FALSE_POSITIVES = {
+    "cybersecurity",
+    "marketing",
+    "software",
+    "engineering",
+    "data",
+    "ai",
+    "machine learning",
+    "internship",
+    "internships",
+    "intern",
+    "stage",
+    "stages",
+    "job",
+    "jobs",
+    "role",
+    "roles",
+}
 _COUNTRY_ALIASES = {
     "canada": "Canada",
     "calgary": "Canada",
@@ -888,9 +1263,27 @@ _COUNTRY_ALIASES = {
     "vancouver": "Canada",
     "france": "France",
     "germany": "Germany",
+    "luxembourg": "Luxembourg",
     "netherlands": "Netherlands",
+    "spain": "Spain",
+    "espagne": "Spain",
+    "england": "UK",
     "uk": "UK",
     "united kingdom": "UK",
+    "usa": "USA",
+    "u s a": "USA",
+    "us": "USA",
+    "u s": "USA",
+    "united states": "USA",
+    "united states of america": "USA",
+    "san francisco": "USA",
+    "miami": "USA",
+    "new york": "USA",
+    "los angeles": "USA",
+    "seattle": "USA",
+    "austin": "USA",
+    "boston": "USA",
+    "chicago": "USA",
 }
 
 

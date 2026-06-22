@@ -11,7 +11,7 @@ from pydantic import BaseModel, Field
 class ScrapeRequest(BaseModel):
     site_name: list[str] | str
     search_term: str
-    results_wanted: int = Field(default=10, ge=1, le=25)
+    results_wanted: int = Field(default=10, ge=1, le=50)
     location: str | None = None
     distance: int | None = None
     job_type: str | None = None

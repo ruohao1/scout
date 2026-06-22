@@ -214,16 +214,7 @@ class JobSpyJobProviderClient:
         if self.worker_url:
             return self._fetch_jobs_from_worker(params)
 
-        try:
-            from jobspy import scrape_jobs
-        except ImportError as exc:
-            raise RuntimeError(
-                "JobSpy is not installed. Run `uv sync` to install python-jobspy, "
-                "or set JOBSPY_WORKER_URL to a running JobSpy worker."
-            ) from exc
-
-        jobs = scrape_jobs(**params)
-        return [_json_safe(row) for row in jobs.to_dict(orient="records")]
+        raise RuntimeError("JOBSPY_WORKER_URL must point to a running JobSpy worker.")
 
     def _fetch_jobs_from_worker(self, params: dict[str, Any]) -> list[dict[str, Any]]:
         request = urllib.request.Request(
@@ -448,7 +439,9 @@ def _jobspy_contract_type(payload: dict[str, Any], text: str) -> str | None:
         return normalized_type
 
     normalized = text.lower()
-    if re.search(r"\b(intern|internship|stage|stagiaire|placement)\b", normalized):
+    if re.search(r"\b(intern|internship|stagiaire|placement)\b", normalized):
+        return "internship"
+    if re.search(r"\bstages?\b(?!\s*\d)", normalized):
         return "internship"
     if re.search(r"\b(contract|contractor|freelance)\b", normalized):
         return "contract"

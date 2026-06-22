@@ -315,8 +315,13 @@ def _has_search_details(text: str) -> bool:
 
 
 def _normalized_text(text: str) -> str:
+    text = _strip_system_reminders(text)
     normalized = re.sub(r"[^\w\s-]", " ", text.lower())
     return re.sub(r"\s+", " ", normalized).strip()
+
+
+def _strip_system_reminders(text: str) -> str:
+    return re.sub(r"<system-reminder>.*?</system-reminder>", " ", text, flags=re.IGNORECASE | re.DOTALL)
 
 
 def _search_query(text: str) -> str:

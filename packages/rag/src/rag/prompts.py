@@ -29,11 +29,13 @@ def job_match_explanation_prompt(*, profile: dict[str, Any], ranked_job: RankedJ
             "score_components": {
                 "vector_score": ranked_job.vector_score,
                 "skill_overlap_score": ranked_job.skill_overlap_score,
+                "text_skill_score": ranked_job.text_skill_score,
                 "location_score": ranked_job.location_score,
                 "contract_type_score": ranked_job.contract_type_score,
                 "recency_score": ranked_job.recency_score,
             },
             "matched_skills": ranked_job.matched_skills,
+            "matched_text_skills": ranked_job.matched_text_skills,
             "missing_skills": ranked_job.missing_skills,
             "evidence": [
                 {
